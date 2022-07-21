@@ -3,6 +3,7 @@ use std::fmt::Display;
 #[derive(Debug, Clone)]
 pub struct Node {
     pub name: String,
+    pub depth: usize,
     pub items: Vec<Item>,
 }
 
