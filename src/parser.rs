@@ -133,24 +133,24 @@ mod test {
         let table = [
             (
                 r#"
-				(  module )
-			"#,
+									(  module )
+								"#,
                 "(module)",
             ),
             (
                 r#"
-				(module
-					(func
-						$add (import "./file" "lol")
-						(param i32)     (param    i64)
-						(return i32 ) ) )
-			"#,
+									(module
+										(func
+											$add (import "./file" "lol")
+											(param i32)     (param    i64)
+											(return i32 ) ) )
+								"#,
                 r#"(module (func $add (import "./file" "lol") (param i32) (param i64) (return i32)))"#,
             ),
             (
                 r#"
-				(import "string   with   space"    but     these spaces    will   be  normalized)
-			"#,
+									(import "string   with   space"    but     these spaces    will   be  normalized)
+								"#,
                 r#"(import "string   with   space" but these spaces will be normalized)"#,
             ),
         ];
