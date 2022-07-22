@@ -32,37 +32,42 @@ pub fn importer(node: &mut Node, loader: &mut impl Loader) -> Result<()> {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use super::*;
+    use crate::loader;
     use crate::parser::Parser;
 
     #[test]
     fn test() {
-        let input = r#"
-          (module
-            (import "./other_file.wat")
-            (func $a)
-            (func $b))
-        "#;
+        let mut map: HashMap<String, String> = HashMap::new();
+        map.insert(
+            "main".into(),
+            r#"
+                (module
+                  (import "a")
+                  (func $a)
+                  (func $b))
+              "#
+            .into(),
+        );
+        map.insert(
+            "a".into(),
+            r#"
+                (module
+                  (func $c)
+                  (func $d))
+              "#
+            .into(),
+        );
+        let mut loader = loader::MockLoader { map };
         let expected = r#"
           (module (func $a) (func $b) (func $c) (func $d))
         "#
         .trim();
 
-        struct L;
-        impl Loader for L {
-            fn load(&mut self, path: &str) -> Result<Option<Node>> {
-                let m = r#"
-                  (module
-                    (func $c)
-                    (func $d))
-                "#;
-                let node = Parser::new(m.to_string()).parse()?;
-                Ok(Some(node))
-            }
-        }
-
-        let mut ast = Parser::new(input).parse().unwrap();
-        importer(&mut ast, &mut L {}).unwrap();
+        let mut ast = loader.load("main").unwrap().unwrap();
+        importer(&mut ast, &mut loader).unwrap();
         assert_eq!(format!("{}", ast), expected);
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -34,6 +34,18 @@ impl Loader for FileSystemLoader {
         let contents = fs::read_to_string(&file_path).map_err(|err| format!("{}", err))?;
         let ast = Parser::new(contents).parse()?;
         self.loaded_files.insert(file_path);
+        Ok(Some(ast))
+    }
+}
+
+pub struct MockLoader {
+    pub map: HashMap<String, String>,
+}
+
+impl Loader for MockLoader {
+    fn load(&mut self, path: &str) -> Result<Option<Node>> {
+        let contents = self.map.get(path).ok_or(format!("Unknown file {}", path))?;
+        let ast = Parser::new(contents).parse()?;
         Ok(Some(ast))
     }
 }
