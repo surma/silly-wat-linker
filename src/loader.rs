@@ -6,35 +6,39 @@ use crate::ast::Node;
 use crate::parser::Parser;
 use crate::Result;
 
+#[derive(Debug, Clone)]
+pub struct LoadRecord {
+    pub module: Node,
+    pub canonical_path: String,
+}
+
 pub trait Loader {
-    fn load(&mut self, path: &str) -> Result<Option<Node>>;
+    fn load(&mut self, path: &str) -> Result<LoadRecord>;
 }
 
 pub struct FileSystemLoader {
     root: PathBuf,
-    loaded_files: HashSet<PathBuf>,
 }
 
 impl FileSystemLoader {
     pub fn new<T: AsRef<Path>>(root: T) -> FileSystemLoader {
         FileSystemLoader {
             root: root.as_ref().to_path_buf(),
-            loaded_files: HashSet::new(),
         }
     }
 }
 
 impl Loader for FileSystemLoader {
-    fn load(&mut self, path: &str) -> Result<Option<Node>> {
+    fn load(&mut self, path: &str) -> Result<LoadRecord> {
         let file_path = self.root.join(path);
-        if self.loaded_files.contains(&file_path) {
-            return Ok(None);
-        }
 
         let contents = fs::read_to_string(&file_path).map_err(|err| format!("{}", err))?;
-        let ast = Parser::new(contents).parse()?;
-        self.loaded_files.insert(file_path);
-        Ok(Some(ast))
+        let module = Parser::new(contents).parse()?;
+        Ok(LoadRecord {
+            module,
+            // FIXME: Better non-utf8 handling
+            canonical_path: file_path.to_str().unwrap().to_string(),
+        })
     }
 }
 
@@ -43,9 +47,13 @@ pub struct MockLoader {
 }
 
 impl Loader for MockLoader {
-    fn load(&mut self, path: &str) -> Result<Option<Node>> {
+    fn load(&mut self, path: &str) -> Result<LoadRecord> {
         let contents = self.map.get(path).ok_or(format!("Unknown file {}", path))?;
-        let ast = Parser::new(contents).parse()?;
-        Ok(Some(ast))
+        let module = Parser::new(contents).parse()?;
+        Ok(LoadRecord {
+            module,
+            // FIXME: Better non-utf8 handling
+            canonical_path: path.to_string(),
+        })
     }
 }

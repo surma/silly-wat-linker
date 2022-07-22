@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::ast::{Item, Node};
+use crate::linker::Linker;
 use crate::utils;
 use crate::Result;
 
@@ -8,12 +9,16 @@ pub fn has_import_node(ast: &Node) -> bool {
     ast.node_iter().any(|node| node.name == "import")
 }
 
-pub fn frontload_imports(ast: &mut Node) -> Result<()> {
-    if !utils::is_module(ast) {
+pub fn sorter(module: &mut Node, _linker: &mut Linker) -> Result<()> {
+    frontload_imports(module)
+}
+
+pub fn frontload_imports(module: &mut Node) -> Result<()> {
+    if !utils::is_module(module) {
         return Err("Can only sort modules".to_string());
     }
 
-    ast.items.sort_unstable_by(|a, b| match (a, b) {
+    module.items.sort_unstable_by(|a, b| match (a, b) {
         (Item::Node(a), Item::Node(b)) => {
             if has_import_node(a) && !has_import_node(b) {
                 Ordering::Less
