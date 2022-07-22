@@ -51,13 +51,14 @@ impl Parser {
 
         let start = self.pos;
         loop {
-            match self.must_peek()? {
-                '"' => {
-                    self.eat_string()?;
-                    break;
-                }
-                ' ' | ')' => break,
-                _ => self.pos += 1,
+            let c = self.must_peek()?;
+            if c == '"' {
+                self.eat_string()?;
+                break;
+            } else if c.is_whitespace() || c == ')' {
+                break;
+            } else {
+                self.pos += 1
             }
         }
         let end = self.pos;
@@ -148,8 +149,8 @@ mod test {
             (
                 r#"
 									(module
-										(func
-											$add (import "./file" "lol")
+										(func $add
+											(import "./file" "lol")
 											(param i32)     (param    i64)
 											(return i32 ) ) )
 								"#,
