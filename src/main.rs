@@ -1,21 +1,23 @@
 use std::io::Read;
 
+use crate::loader::Loader;
+
 pub type Result<T> = std::result::Result<T, String>;
 
 mod ast;
+mod loader;
 mod parser;
 mod passes;
 mod utils;
 
 fn main() {
-    let mut stdin = std::io::stdin();
-    let mut buf: Vec<u8> = vec![];
-    stdin.read_to_end(&mut buf).unwrap();
-    let input = String::from_utf8(buf).unwrap();
-    let mut parser = parser::Parser::new(input);
-    let mut ast = parser.parse().unwrap();
+    let cwd = std::env::current_dir().unwrap();
+    let filepath = std::env::args().nth(1).unwrap();
 
-    // passes::importer::importer(&mut ast).unwrap();
+    let mut loader = loader::FileSystemLoader::new(cwd);
+    let mut ast = loader.load(&filepath).unwrap().unwrap();
+
+    passes::importer::importer(&mut ast, &mut loader).unwrap();
     passes::sorter::frontload_imports(&mut ast).unwrap();
     println!("{}", ast);
 }

@@ -1,16 +1,13 @@
 use crate::ast::{Item, Node};
+use crate::loader::Loader;
 use crate::utils;
 use crate::Result;
-
-pub trait FileLoader {
-    fn load(&mut self, path: &str) -> Result<Option<Node>>;
-}
 
 fn is_file_import_node(node: &Node) -> bool {
     node.name == "import" && node.items.len() == 1 && node.items[0].as_attribute().is_some()
 }
 
-pub fn importer(node: &mut Node, loader: &mut impl FileLoader) -> Result<()> {
+pub fn importer(node: &mut Node, loader: &mut impl Loader) -> Result<()> {
     if !utils::is_module(node) {
         return Err("Importer pass only on top-level `module` sexpr.".to_string());
     }
@@ -21,8 +18,11 @@ pub fn importer(node: &mut Node, loader: &mut impl FileLoader) -> Result<()> {
     node.items = rest;
     for mut import in imports.into_iter().map(|mut item| item.into_node()) {
         let file_path = import.items[0].as_attribute().unwrap();
-
-        let module = loader.load(file_path)?;
+        if !file_path.starts_with("\"") || !file_path.ends_with("\"") {
+            return Err("Import directive expects a string".to_string());
+        }
+        let unquoted_file_path = &file_path[1..file_path.len() - 1];
+        let module = loader.load(unquoted_file_path)?;
         if let Some(module) = module {
             utils::merge_into(node, module)?;
         }
@@ -49,7 +49,7 @@ mod test {
         .trim();
 
         struct L;
-        impl FileLoader for L {
+        impl Loader for L {
             fn load(&mut self, path: &str) -> Result<Option<Node>> {
                 let m = r#"
                   (module
