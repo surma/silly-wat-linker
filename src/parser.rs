@@ -1,11 +1,11 @@
 use crate::ast::{Item, Node};
+use crate::Result;
+
 pub struct Parser {
     input: String,
     pos: usize,
     depth: usize,
 }
-
-pub type Result<T> = std::result::Result<T, String>;
 
 impl Parser {
     pub fn new<T: AsRef<str>>(input: T) -> Parser {

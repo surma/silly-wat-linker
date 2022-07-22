@@ -119,6 +119,13 @@ impl Item {
         }
     }
 
+    pub fn into_node(self) -> Node {
+        match self {
+            Item::Node(node) => node,
+            _ => panic!(),
+        }
+    }
+
     pub fn as_attribute(&self) -> Option<&String> {
         match self {
             Item::Attribute(attribute) => Some(attribute),

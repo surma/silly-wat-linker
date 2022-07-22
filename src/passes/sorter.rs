@@ -1,14 +1,15 @@
 use std::cmp::Ordering;
 
 use crate::ast::{Item, Node};
-use crate::parser::Result;
+use crate::utils;
+use crate::Result;
 
 pub fn has_import_node(ast: &Node) -> bool {
     ast.node_iter().any(|node| node.name == "import")
 }
 
 pub fn frontload_imports(ast: &mut Node) -> Result<()> {
-    if ast.name != "module" {
+    if !utils::is_module(ast) {
         return Err("Can only sort modules".to_string());
     }
 
