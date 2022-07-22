@@ -7,48 +7,32 @@ pub struct Node {
     pub items: Vec<Item>,
 }
 
-pub struct Walker<'a> {
-    node: &'a Node,
-    i: Option<usize>,
+pub trait Visitor {
+    fn visit_node(&mut self, node: &mut Node) {}
+    fn visit_attribute(&mut self, attr: &mut String) {}
 }
 
-impl<'a> Iterator for Walker<'a> {
-    type Item = &'a Node;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.i {
-            None => {
-                self.i = Some(0);
-                Some(self.node)
-            }
-            Some(i) => {
-                let maybeItem = self
-                    .node
-                    .items
-                    .iter()
-                    .enumerate()
-                    .skip(i)
-                    .find(|&(idx, item)| item.as_node().is_some());
-                if let Some((idx, _)) = maybeItem {
-                    self.i = Some(idx + 1);
-                }
-                maybeItem
-                    .map(|(idx, item)| item)
-                    .and_then(|item| item.as_node())
-            }
+impl Node {
+    pub fn walk_mut(&mut self, visitor: &mut impl Visitor) {
+        visitor.visit_node(self);
+        for item in &mut self.items {
+            match item {
+                Item::Attribute(attr) => visitor.visit_attribute(attr),
+                Item::Node(node) => node.walk_mut(visitor),
+            };
         }
     }
-}
 
-impl<'a> IntoIterator for &'a Node {
-    type IntoIter = Walker<'a>;
-    type Item = &'a Node;
+    pub fn node_iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Node> + 'a> {
+        let parent_it = [self].into_iter();
+        let item_it = self
+            .items
+            .iter()
+            .flat_map(|item| item.as_node())
+            .map(|node| node.node_iter())
+            .flatten();
 
-    fn into_iter(self) -> Self::IntoIter {
-        Walker {
-            node: self,
-            i: None,
-        }
+        Box::new(parent_it.chain(item_it))
     }
 }
 
@@ -75,7 +59,7 @@ pub enum Item {
 }
 
 impl Item {
-    fn as_node(&self) -> Option<&Node> {
+    pub fn as_node(&self) -> Option<&Node> {
         match self {
             Item::Node(node) => Some(node),
             _ => None,
@@ -99,16 +83,16 @@ mod test {
         let table = [(
             r#"
 									(module
-										(func $1)
-										(func $2)
-										(func $3))
+										(func (a))
+										(func (b) (c))
+										(func))
 								"#,
-            &["module", "func", "func", "func"],
+            &["module", "func", "a", "func", "b", "c", "func"],
         )];
         for (input, expected) in table {
             let mut parser = Parser::new(input);
             let ast = parser.parse().unwrap();
-            let nodes: Vec<String> = ast.into_iter().map(|node| node.name.clone()).collect();
+            let nodes: Vec<String> = ast.node_iter().map(|node| node.name.clone()).collect();
             assert_eq!(&nodes, expected)
         }
     }

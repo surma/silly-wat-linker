@@ -182,7 +182,7 @@ mod test {
         let expected_depths = [0, 1, 2, 2, 2, 2];
         let mut parser = Parser::new(input);
         let ast = parser.parse().unwrap();
-        for (i, node) in ast.into_iter().enumerate() {
+        for (i, node) in ast.node_iter().enumerate() {
             assert_eq!(node.depth, expected_depths[i]);
         }
     }
