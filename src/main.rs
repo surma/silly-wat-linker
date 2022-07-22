@@ -2,6 +2,7 @@ use std::io::Read;
 
 mod ast;
 mod parser;
+mod sorter;
 
 fn main() {
     let mut stdin = std::io::stdin();
