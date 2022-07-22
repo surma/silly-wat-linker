@@ -156,10 +156,10 @@ mod test {
     fn node_iter() {
         let table = [(
             r#"
-              (module
-                (func (a))
-                (func (b) (c))
-                (func))
+                (module
+                    (func (a))
+                    (func (b) (c))
+                    (func))
             "#,
             &["module", "func", "a", "func", "b", "c", "func"],
         )];
@@ -174,10 +174,10 @@ mod test {
     #[test]
     fn node_iter_mut() {
         let input = r#"
-          (module $u
-            (func $v)
-            (func (b $w) $x (c $y))
-            (func $z))
+            (module $u
+                (func $v)
+                (func (b $w) $x (c $y))
+                (func $z))
         "#;
         let expected = r#"(module $u0 (func $v0) (func (b $w0) $x0 (c $y0)) (func $z0))"#;
         let mut parser = Parser::new(input);

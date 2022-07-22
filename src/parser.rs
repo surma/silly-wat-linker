@@ -142,25 +142,31 @@ mod test {
         let table = [
             (
                 r#"
-									(  module )
-								"#,
-                "(module)",
+                    (  module )
+                "#,
+                r#"
+                    (module)
+                "#.trim(),
             ),
             (
                 r#"
-									(module
-										(func $add
-											(import "./file" "lol")
-											(param i32)     (param    i64)
-											(return i32 ) ) )
-								"#,
-                r#"(module (func $add (import "./file" "lol") (param i32) (param i64) (return i32)))"#,
+                    (module
+                        (func $add
+                            (import "./file" "lol")
+                            (param i32)     (param    i64)
+                            (return i32 ) ) )
+                "#,
+                r#"
+                    (module (func $add (import "./file" "lol") (param i32) (param i64) (return i32)))
+                "#.trim(),
             ),
             (
                 r#"
-									(import "string   with   space"    but     these spaces    will   be  normalized)
-								"#,
-                r#"(import "string   with   space" but these spaces will be normalized)"#,
+                    (import "string   with   space"    but     these spaces    will   be  normalized)
+                "#,
+                r#"
+                    (import "string   with   space" but these spaces will be normalized)
+                "#.trim(),
             ),
         ];
         for (input, expected) in table {
@@ -173,12 +179,12 @@ mod test {
     #[test]
     fn depth_test() {
         let input = r#"
-					(module
-						(func
-							$add (import "./file" "lol")
-							(param i32)     (param2    i64)
-							(return i32 ) ) )
-				"#;
+            (module
+                (func
+                    $add (import "./file" "lol")
+                    (param i32)     (param2    i64)
+                    (return i32 ) ) )
+        "#;
 
         let expected_depths = [0, 1, 2, 2, 2, 2];
         let mut parser = Parser::new(input);

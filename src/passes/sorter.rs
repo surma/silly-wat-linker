@@ -43,12 +43,15 @@ mod test {
     fn table_test() {
         let table = [(
             r#"
-							(module
-								(func $1)
-								(func (import "a"))
-								(import "b"))
-						"#,
-            r#"(module (func (import "a")) (import "b") (func $1))"#,
+                (module
+                    (func $1)
+                    (func (import "a"))
+                    (import "b"))
+            "#,
+            r#"
+                (module (func (import "a")) (import "b") (func $1))
+            "#
+            .trim(),
         )];
         for (input, expected) in table {
             let mut parser = Parser::new(input);

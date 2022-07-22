@@ -43,35 +43,35 @@ mod test {
         let table = [
             [
                 r#"
-                  (module
-                    (import "1")
-                    (func $a)
-                    (func $b))
+                    (module
+                        (import "1")
+                        (func $a)
+                        (func $b))
                 "#,
                 r#"
-                  (module
-                    (func $c)
-                    (func $d))
+                    (module
+                        (func $c)
+                        (func $d))
                 "#,
                 r#"
-                  (module (func $a) (func $b) (func $c) (func $d))
+                    (module (func $a) (func $b) (func $c) (func $d))
                 "#,
             ],
             [
                 r#"
-                  (module
-                    (import "1")
-                    (import "1")
-                    (func $a)
-                    (func $b))
+                    (module
+                        (import "1")
+                        (import "1")
+                        (func $a)
+                        (func $b))
                 "#,
                 r#"
-                  (module
-                    (func $c)
-                    (func $d))
+                    (module
+                        (func $c)
+                        (func $d))
                 "#,
                 r#"
-                  (module (func $a) (func $b) (func $c) (func $d))
+                    (module (func $a) (func $b) (func $c) (func $d))
                 "#,
             ],
         ];
