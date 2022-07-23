@@ -87,7 +87,7 @@ mod test {
             let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
             linker.passes.push(importer);
 
-            let module = linker.link("0").unwrap();
+            let module = linker.link_file("0").unwrap();
             assert_eq!(format!("{}", module), expected);
         }
     }

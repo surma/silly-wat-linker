@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::ast::Node;
 use crate::loader::{FileSystemLoader, LoadRecord, Loader};
+use crate::parser;
 use crate::passes::Pass;
 use crate::Result;
 
@@ -20,9 +21,17 @@ impl Linker {
         }
     }
 
-    pub fn link(&mut self, path: &str) -> Result<Node> {
-        let mut module = self.load(path)?.module;
+    pub fn link_raw<T: AsRef<str>>(&mut self, content: T) -> Result<Node> {
+        let mut module = parser::Parser::new(content).parse()?;
+        self.link_module(module)
+    }
 
+    pub fn link_file(&mut self, path: &str) -> Result<Node> {
+        let mut module = self.load(path)?.module;
+        self.link_module(module)
+    }
+
+    pub fn link_module(&mut self, mut module: Node) -> Result<Node> {
         for pass in self.passes.clone() {
             pass(&mut module, self)?;
         }
