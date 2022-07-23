@@ -113,6 +113,7 @@ fn main() -> AnyResult<()> {
 
     if args.emit_binary {
         let mut child = process::Command::new("wat2wasm")
+            .arg("--output=-")
             .arg("-")
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
