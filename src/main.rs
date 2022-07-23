@@ -1,8 +1,11 @@
-use clap::Parser;
 use std::env;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::process;
+
+use clap::Parser;
+
+use anyhow::{anyhow, Result as AnyResult};
 
 mod ast;
 mod linker;
@@ -60,8 +63,8 @@ struct Args {
     root: Option<String>,
 }
 
-fn transform_list_parser(args: &Args) -> std::result::Result<Vec<passes::Pass>, String> {
-    let list: Vec<std::result::Result<passes::Pass, String>> = args
+fn transform_list_parser(args: &Args) -> AnyResult<Vec<passes::Pass>> {
+    let list: Vec<AnyResult<passes::Pass>> = args
         .transform_list
         .split(",")
         .map(|item| {
@@ -70,18 +73,18 @@ fn transform_list_parser(args: &Args) -> std::result::Result<Vec<passes::Pass>, 
                 .iter()
                 .find(|&&(key, _)| key == name)
                 .map(|&(_, pass)| pass);
-            pass.ok_or(format!("Unknown pass name {}", name))
+            pass.ok_or(anyhow!("Unknown pass name {}", name))
         })
         .collect();
 
-    let result: Vec<passes::Pass> = Result::from_iter(list)?;
+    let result: Vec<passes::Pass> = AnyResult::from_iter(list)?;
     Ok(result)
 }
 
-fn main() {
+fn main() -> AnyResult<()> {
     let args = Args::parse();
 
-    let transform_list = transform_list_parser(&args).unwrap();
+    let transform_list = transform_list_parser(&args)?;
 
     let root = args
         .root
@@ -95,36 +98,41 @@ fn main() {
 
     let module = if args.input == "-" {
         let mut content = String::new();
-        io::stdin().read_to_string(&mut content).unwrap();
-        linker.link_raw(content).unwrap()
+        io::stdin().read_to_string(&mut content)?;
+        linker.link_raw(content).map_err(|err| anyhow!(err))?
     } else {
-        linker.link_file(&args.input).unwrap()
+        linker.link_file(&args.input).map_err(|err| anyhow!(err))?
     };
     let serialized_module = format!("{}", module);
-    println!("{}", serialized_module);
 
     let mut output: Box<dyn Write> = if args.output == "-" {
         Box::new(io::stdout())
     } else {
-        Box::new(File::create(args.output).unwrap())
+        Box::new(File::create(args.output)?)
     };
+
     if args.emit_binary {
         let mut child = process::Command::new("wat2wasm")
-            // .args(["-o", "-"])
             .arg("-")
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::inherit())
-            .spawn()
-            .unwrap();
+            .spawn()?;
+
         child
             .stdin
             .take()
-            .unwrap()
-            .write_all(serialized_module.as_bytes())
-            .unwrap();
-        io::copy(&mut child.stdout.take().unwrap(), &mut output).unwrap();
+            .ok_or(anyhow!("Could not write to wat2wasm’s stdin"))?
+            .write_all(serialized_module.as_bytes())?;
+        io::copy(
+            &mut child
+                .stdout
+                .take()
+                .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?,
+            &mut output,
+        )?;
     } else {
-        output.write_all(serialized_module.as_bytes()).unwrap();
+        output.write_all(serialized_module.as_bytes())?;
     }
+    Ok(())
 }
