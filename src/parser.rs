@@ -21,9 +21,16 @@ impl Parser {
         Ok(node)
     }
 
+    fn remaining_str(&self) -> &str {
+        if self.pos > self.input.len() {
+            return "";
+        }
+        &self.input[self.pos..]
+    }
+
     fn parse_node(&mut self) -> Result<Node> {
         self.eat_whitespace()?;
-        self.assert_next('(')?;
+        self.assert_next("(")?;
         self.depth += 1;
         self.eat_whitespace()?;
         let ident = self.parse_identifier()?;
@@ -33,7 +40,7 @@ impl Parser {
             items.push(self.parse_item()?);
             self.eat_whitespace()?;
         }
-        self.assert_next(')')?;
+        self.assert_next(")")?;
         self.depth -= 1;
         self.eat_whitespace()?;
 
@@ -67,7 +74,7 @@ impl Parser {
     }
 
     fn eat_string(&mut self) -> Result<()> {
-        self.assert_next('"')?;
+        self.assert_next("\"")?;
         loop {
             match self.must_peek()? {
                 '"' => break,
@@ -77,7 +84,7 @@ impl Parser {
             }
             self.pos += 1
         }
-        self.assert_next('"')?;
+        self.assert_next("\"")?;
         Ok(())
     }
 
@@ -85,11 +92,24 @@ impl Parser {
         self.pos == self.input.chars().count()
     }
 
-    fn assert_next(&mut self, expected: char) -> Result<()> {
-        let got = self.must_next()?;
-        if got != expected {
-            return Err(format!("Expected '{}', got '{}'", expected, got));
+    fn is_next(&self, expected: &str) -> bool {
+        if self.pos + expected.len() >= self.input.len() {
+            return false;
         }
+        self.remaining_str().starts_with(expected)
+    }
+
+    fn assert_next(&mut self, expected: &str) -> Result<()> {
+        if !self.is_next(expected) {
+            let s = self.remaining_str();
+            return Err(format!(
+                "(pos={}) Expected '{}', got '{}'",
+                self.pos,
+                expected,
+                &s[0..s.len().min(expected.len())]
+            ));
+        }
+        self.pos += expected.len();
         Ok(())
     }
 
@@ -126,54 +146,96 @@ impl Parser {
                 Some(c) => c,
                 None => return Ok(()),
             };
-            if !char.is_whitespace() {
+
+            if self.is_next(";;") {
+                self.assert_next(";;")?;
+                drop(self.eat_line());
+            } else if self.is_next("(;") {
+                drop(self.eat_comment());
+            } else if char.is_whitespace() {
+                self.pos += 1;
+            } else {
                 return Ok(());
             }
-            self.pos += 1;
         }
+    }
+
+    fn eat_line(&mut self) -> Result<()> {
+        while self.must_next()? != '\n' {}
+        Ok(())
+    }
+    fn eat_comment(&mut self) -> Result<()> {
+        self.assert_next("(;")?;
+        while !self.is_next(";)") {
+            self.pos += 1
+        }
+        self.assert_next(";)")?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::Parser;
+
+    fn parse_and_compare<T: AsRef<str>>(input: T, expected: T) {
+        let mut parser = Parser::new(input);
+        let ast = parser.parse().unwrap();
+        assert_eq!(&format!("{}", ast), expected.as_ref())
+    }
+
     #[test]
-    fn table_test() {
-        let table = [
-            (
-                r#"
-                    (  module )
-                "#,
-                r#"
-                    (module)
-                "#.trim(),
-            ),
-            (
-                r#"
-                    (module
-                        (func $add
-                            (import "./file" "lol")
-                            (param i32)     (param    i64)
-                            (return i32 ) ) )
-                "#,
-                r#"
-                    (module (func $add (import "./file" "lol") (param i32) (param i64) (return i32)))
-                "#.trim(),
-            ),
-            (
-                r#"
-                    (import "string   with   space"    but     these spaces    will   be  normalized)
-                "#,
-                r#"
-                    (import "string   with   space" but these spaces will be normalized)
-                "#.trim(),
-            ),
-        ];
-        for (input, expected) in table {
-            let mut parser = Parser::new(input);
-            let ast = parser.parse().unwrap();
-            assert_eq!(&format!("{}", ast), expected)
-        }
+    fn simple() {
+        let input = r#"
+            (  module )
+        "#;
+        let expected = r#"(module)"#;
+        parse_and_compare(input, expected);
+    }
+
+    #[test]
+    fn attributes() {
+        let input = r#"
+            (module
+                (func $add
+                    (import "./file" "lol")
+                    (param i32)     (param    i64)
+                    (return i32 ) ) )
+        "#;
+        let expected = r#"
+            (module (func $add (import "./file" "lol") (param i32) (param i64) (return i32)))
+        "#
+        .trim();
+        parse_and_compare(input, expected);
+    }
+
+    #[test]
+    fn string_attributes() {
+        let input = r#"
+            (import "string   with   space"    but     these spaces    will   be  normalized)
+        "#;
+        let expected = r#"
+            (import "string   with   space" but these spaces will be normalized)
+        "#
+        .trim();
+        parse_and_compare(input, expected);
+    }
+
+    #[test]
+    fn comments() {
+        let input = r#"
+            ;; Comment
+            (module ;; Comment
+                (func)
+                (func (; block comment ;) )
+                (; block comment ;)
+            ) ;; Comment
+        "#;
+        let expected = r#"
+            (module (func) (func))
+        "#
+        .trim();
+        parse_and_compare(input, expected);
     }
 
     #[test]
