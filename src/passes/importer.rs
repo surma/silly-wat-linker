@@ -5,12 +5,18 @@ use crate::utils;
 use crate::Result;
 
 fn is_file_import_node(node: &Node) -> bool {
-    node.name == "import" && node.items.len() == 1 && node.items[0].as_attribute().is_some()
+    node.name == "import"
+        && node.items.len() == 2
+        && node.items[0].as_attribute().is_some()
+        && node.items[1]
+            .as_node()
+            .map(|node| node.name == "file")
+            .unwrap_or(false)
 }
 
 pub fn importer(node: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(node) {
-        return Err("Importer pass only on top-level `module` sexpr.".to_string());
+        return Err("Importer pass can only be applied to top-level `module` sexpr.".to_string());
     }
     let items = std::mem::replace(&mut node.items, vec![]);
     let (imports, rest): (Vec<Item>, Vec<Item>) = items
@@ -38,57 +44,62 @@ mod test {
     use crate::linker;
     use crate::loader;
 
-    #[test]
-    fn table_test() {
-        let table = [
-            [
-                r#"
-                    (module
-                        (import "1")
-                        (func $a)
-                        (func $b))
-                "#,
-                r#"
-                    (module
-                        (func $c)
-                        (func $d))
-                "#,
-                r#"
-                    (module (func $a) (func $b) (func $c) (func $d))
-                "#,
-            ],
-            [
-                r#"
-                    (module
-                        (import "1")
-                        (import "1")
-                        (func $a)
-                        (func $b))
-                "#,
-                r#"
-                    (module
-                        (func $c)
-                        (func $d))
-                "#,
-                r#"
-                    (module (func $a) (func $b) (func $c) (func $d))
-                "#,
-            ],
-        ];
-        for test in table {
-            let inputs = &test[0..test.len() - 1];
-            let expected = test[test.len() - 1].trim();
-            let map: HashMap<String, String> = HashMap::from_iter(
-                inputs
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, str)| (format!("{}", idx), str.to_string())),
-            );
-            let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
-            linker.passes.push(importer);
+    fn run_test<T: AsRef<str>>(inputs: &[T], expected: T) {
+        let map: HashMap<String, String> = HashMap::from_iter(
+            inputs
+                .iter()
+                .enumerate()
+                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string())),
+        );
+        let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
+        linker.passes.push(importer);
 
-            let module = linker.link_file("0").unwrap();
-            assert_eq!(format!("{}", module), expected);
-        }
+        let module = linker.link_file("0").unwrap();
+        assert_eq!(format!("{}", module), expected.as_ref().trim());
+    }
+
+    #[test]
+    fn simple_import() {
+        run_test(
+            &[
+                r#"
+                    (module
+                        (import "1" (file))
+                        (func $a)
+                        (func $b))
+                "#,
+                r#"
+                    (module
+                        (func $c)
+                        (func $d))
+                "#,
+            ],
+            r#"
+                (module (func $a) (func $b) (func $c) (func $d))
+            "#,
+        );
+    }
+
+    #[test]
+    fn dedupe_imports() {
+        run_test(
+            &[
+                r#"
+                    (module
+                        (import "1" (file))
+                        (import "1" (file))
+                        (func $a)
+                        (func $b))
+                "#,
+                r#"
+                    (module
+                        (func $c)
+                        (func $d))
+                "#,
+            ],
+            r#"
+                (module (func $a) (func $b) (func $c) (func $d))
+            "#,
+        );
     }
 }
