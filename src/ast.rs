@@ -40,6 +40,7 @@ impl Node {
             match item {
                 Item::Attribute(attr) => visitor.visit_attribute(attr),
                 Item::Node(node) => node.walk_mut(visitor),
+                Item::Nothing => {},
             };
         }
     }
@@ -100,6 +101,7 @@ impl Display for Node {
 
 #[derive(Debug, Clone)]
 pub enum Item {
+    Nothing,
     Attribute(String),
     Node(Node),
 }
@@ -146,6 +148,7 @@ impl Display for Item {
         match self {
             Item::Attribute(str) => write!(f, "{}", str),
             Item::Node(node) => write!(f, "{}", node),
+            Item::Nothing => write!(f, ""),
         }
     }
 }
