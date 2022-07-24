@@ -135,7 +135,9 @@ impl Parser {
 
     fn parse_identifier(&mut self) -> Result<String> {
         let start = self.pos;
-        while self.must_peek()?.is_alphanumeric() || ADDITIONAL_ALLOWED_CHARS.contains(self.must_peek()?) {
+        while self.must_peek()?.is_alphanumeric()
+            || ADDITIONAL_ALLOWED_CHARS.contains(self.must_peek()?)
+        {
             self.pos += 1;
         }
         let end = self.pos;

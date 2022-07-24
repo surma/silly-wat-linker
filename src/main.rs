@@ -119,6 +119,8 @@ fn main() -> AnyResult<()> {
             .take()
             .ok_or(anyhow!("Could not write to wat2wasm’s stdin"))?
             .write_all(&payload)?;
+
+        payload.clear();
         child
             .stdout
             .take()
