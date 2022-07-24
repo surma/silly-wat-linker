@@ -1,6 +1,7 @@
 use std::env;
 use std::fs::File;
 use std::io::{self, Read, Write};
+use std::process;
 
 use clap::Parser;
 
@@ -31,7 +32,7 @@ struct Args {
     #[clap(short = 'o', long = "output", default_value = "-")]
     output: String,
 
-    /// Compile to Wasm rather than emitting .wat.
+    /// Invoke `wat2wasm` to compile straight to Wasm.
     #[clap(
         short = 'c',
         long = "emit-binary",
@@ -39,6 +40,15 @@ struct Args {
         value_parser
     )]
     emit_binary: bool,
+
+    /// Additional flags to pass to wat2wasm.
+    #[clap(
+        long = "wat2wasm-flags",
+        requires = "emit-binary",
+        value_parser,
+        name = "FLAGS"
+    )]
+    wat2wasm_flags: Option<String>,
 
     /// Comma-separated list of transforms.
     #[clap(
@@ -93,17 +103,37 @@ fn main() -> AnyResult<()> {
     } else {
         linker.link_file(&args.input).map_err(|err| anyhow!(err))?
     };
-    let mut payload = format!("{}", module).into_bytes();
-
-    if args.emit_binary {
-        payload = wabt::wat2wasm(payload)?
-    }
+    let serialized_module = format!("{}", module);
 
     let mut output: Box<dyn Write> = if args.output == "-" {
         Box::new(io::stdout())
     } else {
         Box::new(File::create(args.output)?)
     };
-    output.write_all(&payload)?;
+
+    if args.emit_binary {
+        let mut child = process::Command::new("wat2wasm")
+            .arg("--output=-")
+            .arg("-")
+            .stdin(process::Stdio::piped())
+            .stdout(process::Stdio::piped())
+            .stderr(process::Stdio::inherit())
+            .spawn()?;
+
+        child
+            .stdin
+            .take()
+            .ok_or(anyhow!("Could not write to wat2wasm’s stdin"))?
+            .write_all(serialized_module.as_bytes())?;
+        io::copy(
+            &mut child
+                .stdout
+                .take()
+                .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?,
+            &mut output,
+        )?;
+    } else {
+        output.write_all(serialized_module.as_bytes())?;
+    }
     Ok(())
 }
