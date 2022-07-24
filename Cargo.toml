@@ -12,3 +12,4 @@ authors = ["Surma <surma@surma.dev>"]
 [dependencies]
 anyhow = "1.0.58"
 clap = {version = "3.2.14", features = ["derive"] }
+wabt = "0.10.0"
