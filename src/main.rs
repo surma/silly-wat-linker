@@ -103,13 +103,7 @@ fn main() -> AnyResult<()> {
     } else {
         linker.link_file(&args.input).map_err(|err| anyhow!(err))?
     };
-    let serialized_module = format!("{}", module);
-
-    let mut output: Box<dyn Write> = if args.output == "-" {
-        Box::new(io::stdout())
-    } else {
-        Box::new(File::create(args.output)?)
-    };
+    let mut payload = format!("{}", module).into_bytes();
 
     if args.emit_binary {
         let mut child = process::Command::new("wat2wasm")
@@ -124,16 +118,21 @@ fn main() -> AnyResult<()> {
             .stdin
             .take()
             .ok_or(anyhow!("Could not write to wat2wasm’s stdin"))?
-            .write_all(serialized_module.as_bytes())?;
-        io::copy(
-            &mut child
-                .stdout
-                .take()
-                .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?,
-            &mut output,
-        )?;
-    } else {
-        output.write_all(serialized_module.as_bytes())?;
+            .write_all(&payload)?;
+        child
+            .stdout
+            .take()
+            .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?
+            .read_to_end(&mut payload)?;
     }
+
+    let mut output: Box<dyn Write> = if args.output == "-" {
+        Box::new(io::stdout())
+    } else {
+        Box::new(File::create(args.output)?)
+    };
+
+    output.write_all(&payload)?;
+
     Ok(())
 }

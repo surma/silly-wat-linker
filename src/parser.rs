@@ -7,6 +7,8 @@ pub struct Parser {
     depth: usize,
 }
 
+static ADDITIONAL_ALLOWED_CHARS: &str = "._-";
+
 impl Parser {
     pub fn new<T: AsRef<str>>(input: T) -> Parser {
         Parser {
@@ -133,7 +135,7 @@ impl Parser {
 
     fn parse_identifier(&mut self) -> Result<String> {
         let start = self.pos;
-        while self.must_peek()?.is_alphanumeric() {
+        while self.must_peek()?.is_alphanumeric() || ADDITIONAL_ALLOWED_CHARS.contains(self.must_peek()?) {
             self.pos += 1;
         }
         let end = self.pos;
@@ -190,6 +192,15 @@ mod test {
             (  module )
         "#;
         let expected = r#"(module)"#;
+        parse_and_compare(input, expected);
+    }
+
+    #[test]
+    fn subdirectives() {
+        let input = r#"
+            (i32.const 0)
+        "#;
+        let expected = r#"(i32.const 0)"#;
         parse_and_compare(input, expected);
     }
 
