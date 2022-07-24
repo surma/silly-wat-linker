@@ -40,7 +40,7 @@ impl Node {
             match item {
                 Item::Attribute(attr) => visitor.visit_attribute(attr),
                 Item::Node(node) => node.walk_mut(visitor),
-                Item::Nothing => {},
+                Item::Nothing => {}
             };
         }
     }
@@ -92,6 +92,7 @@ impl Display for Node {
             if self.items.len() > 0 { " " } else { "" },
             self.items
                 .iter()
+                .filter(|&item| !item.is_nothing())
                 .map(|item| format!("{}", item))
                 .collect::<Vec<String>>()
                 .join(" ")
@@ -125,6 +126,13 @@ impl Item {
         match self {
             Item::Node(node) => node,
             _ => panic!(),
+        }
+    }
+
+    pub fn is_nothing(&self) -> bool {
+        match self {
+            Item::Nothing => true,
+            _ => false,
         }
     }
 
