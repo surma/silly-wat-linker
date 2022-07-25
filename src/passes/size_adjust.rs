@@ -7,10 +7,15 @@ fn is_active_data_segment(data_seg: &Node) -> Result<bool> {
     if data_seg.name != "data" {
         return Err(format!("Expected a data segment, found {}", data_seg.name));
     }
-    Ok(data_seg
+    let has_memory_node = data_seg
         .immediate_node_iter()
         .find(|node| node.name == "memory")
-        .is_some())
+        .is_some();
+    let has_offset_node = data_seg
+        .immediate_node_iter()
+        .find(|node| node.name == "offset" || node.name == "i32.const")
+        .is_some();
+    Ok(has_memory_node || has_offset_node)
 }
 
 pub fn size_adjust(module: &mut Node, _linker: &mut Linker) -> Result<()> {
@@ -164,18 +169,29 @@ mod test {
     }
 
     #[test]
-    fn passive_data_test() {
+    fn passive_memory_data_test() {
         let input = format!(
             r#"
             (module
                 (memory $x)
-                (data (memory $x) (i32.const {}) "1")
-                (data (i32.const {}) "1") ;; Passive!
+                (data "{}")
             )
         "#,
-            65536 * 3,
-            65536 * 5
+            string_of_length(4, 1)
         );
-        run_test(input, 4);
+        run_test(input, 1);
+    }
+
+    #[test]
+    fn implicit_memory_data_test() {
+        let input = format!(
+            r#"
+            (module
+                (memory $x)
+                (data (i32.const 65536) "1")
+            )
+        "#
+        );
+        run_test(input, 2);
     }
 }
