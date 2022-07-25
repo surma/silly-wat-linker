@@ -20,6 +20,10 @@ impl Parser {
 
     pub fn parse(&mut self) -> Result<Node> {
         let node = self.parse_node()?;
+        self.eat_whitespace()?;
+        if self.pos < self.input.len() {
+            return Err(format!("Stray data after module: {}", self.remaining_str()));
+        }
         Ok(node)
     }
 
@@ -95,7 +99,7 @@ impl Parser {
     }
 
     fn is_next(&self, expected: &str) -> bool {
-        if self.pos + expected.len() >= self.input.len() {
+        if self.pos + expected.len() > self.input.len() {
             return false;
         }
         self.remaining_str().starts_with(expected)
@@ -188,6 +192,13 @@ mod test {
     }
 
     #[test]
+    fn minimal() {
+        let input = r#"(module)"#;
+        let expected = r#"(module)"#;
+        parse_and_compare(input, expected);
+    }
+
+    #[test]
     fn simple() {
         let input = r#"
             (  module )
@@ -266,5 +277,16 @@ mod test {
         for (i, node) in ast.node_iter().enumerate() {
             assert_eq!(node.depth, expected_depths[i]);
         }
+    }
+
+    #[test]
+    fn stray_data() {
+        let input = r#"
+            (module)
+                (func))
+        "#;
+
+        let mut parser = Parser::new(input);
+        assert!(parser.parse().is_err());
     }
 }

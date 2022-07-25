@@ -8,7 +8,7 @@ use crate::Result;
 
 pub struct Linker {
     loader: Box<dyn Loader>,
-    pub(crate) loaded_files: HashMap<String, LoadRecord>,
+    pub(crate) loaded_modules: HashMap<String, String>,
     pub features: Vec<Feature>,
 }
 
@@ -16,7 +16,7 @@ impl Linker {
     pub fn new(loader: Box<dyn Loader>) -> Linker {
         Linker {
             loader,
-            loaded_files: HashMap::new(),
+            loaded_modules: HashMap::new(),
             features: vec![],
         }
     }
@@ -27,7 +27,7 @@ impl Linker {
     }
 
     pub fn link_file(&mut self, path: &str) -> Result<Node> {
-        let module = self.load(path)?.module;
+        let module = self.load_module(path)?.contents;
         self.link_module(module)
     }
 
@@ -48,24 +48,32 @@ impl Default for Linker {
 }
 
 impl Loader for Linker {
-    fn load(&mut self, path: &str) -> Result<LoadRecord> {
-        let lr = match self.loaded_files.get(path) {
-            Some(lr) => LoadRecord {
-                // FIXME: This is not a great way to dedupe importing the same file.
-                module: Node {
-                    name: "module".to_string(),
-                    items: vec![],
-                    depth: lr.module.depth,
-                },
-                ..lr.clone()
+    fn load_raw(&mut self, path: &str) -> Result<LoadRecord<Vec<u8>>> {
+        self.loader.load_raw(path)
+    }
+
+    // Linker dedupes by returning an empty module when a module is loaded the second time.
+    // FIXME: This is not a great way to dedupe.
+    fn load_module(&mut self, path: &str) -> Result<LoadRecord<Node>> {
+        let lr = self.loaded_modules.get(path).cloned();
+
+        let lr = match lr {
+            Some(canonical_path) => LoadRecord {
+                contents: "(module)".to_string().into_bytes(),
+                canonical_path,
             },
             None => {
-                let lr = self.loader.load(path)?;
-                self.loaded_files
-                    .insert(lr.canonical_path.clone(), lr.clone());
+                let lr = self.loader.load_raw(path)?;
+                self.loaded_modules
+                    .insert(lr.canonical_path.clone(), lr.canonical_path.clone());
                 lr
             }
         };
-        Ok(lr)
+
+        let contents = String::from_utf8(lr.contents).map_err(|err| format!("{}", err))?;
+        Ok(LoadRecord {
+            canonical_path: lr.canonical_path.clone(),
+            contents: parser::Parser::new(contents).parse()?,
+        })
     }
 }

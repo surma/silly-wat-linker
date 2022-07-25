@@ -117,7 +117,7 @@ mod test {
                 ]
                 .into_iter()
                 .enumerate()
-                .map(|(idx, code)| (format!("{}", idx), code.to_string())),
+                .map(|(idx, code)| (format!("{}", idx), code.to_string().into_bytes())),
             ),
         };
         let mut linker = Linker::new(Box::new(loader));

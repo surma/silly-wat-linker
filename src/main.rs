@@ -21,6 +21,7 @@ static FEATURES: &[(&str, features::Feature)] = &[
     ("sort", features::sort::sort),
     ("size_adjust", features::size_adjust::size_adjust),
     ("start_merge", features::start_merge::start_merge),
+    ("data_import", features::data_import::data_import),
 ];
 
 #[derive(Parser)]
@@ -56,7 +57,7 @@ struct Args {
     #[clap(
         long = "features",
         name = "FEATURE LIST",
-        default_value = "import, size_adjust, start_merge, sort"
+        default_value = "import, data_import, size_adjust, start_merge, sort"
     )]
     feature_list: String,
 

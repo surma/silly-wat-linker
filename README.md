@@ -41,6 +41,17 @@ Adds support for importing another .wat file into the current one.
 )
 ```
 
+### Data Importer (`data_import`)
+
+Allows you to import other files as data segments.
+
+```wat
+(module
+	(data (i32.const 1024) (import "other_file.wat" (raw))
+	;; ...
+)
+```
+
 ### Size Adjuster (`size_adjust`)
 
 Automatically adjust the size of `memory` directives to be big enough to hold all active `data` segments. (This feature is also supposed to do the same for `tables` and `elem` segments, but this hasn’t been implemented yet.)

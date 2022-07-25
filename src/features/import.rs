@@ -1,7 +1,7 @@
 use crate::ast::{Item, Node};
 use crate::linker::Linker;
 use crate::loader::Loader;
-use crate::utils;
+use crate::utils::{self, is_string_literal};
 use crate::Result;
 
 fn is_file_import_node(node: &Node) -> bool {
@@ -34,11 +34,11 @@ pub fn import(module: &mut Node, linker: &mut Linker) -> Result<()> {
         let import_node = std::mem::replace(&mut module.items[i - 1], Item::Nothing).into_node();
         // Guaranteed to not throw by `is_file_import_node`
         let file_path = import_node.items[0].as_attribute().unwrap();
-        if !file_path.starts_with("\"") || !file_path.ends_with("\"") {
+        if !is_string_literal(file_path) {
             return Err("Import directive expects a string".to_string());
         }
         let unquoted_file_path = &file_path[1..file_path.len() - 1];
-        let imported_module = linker.load(unquoted_file_path)?.module;
+        let imported_module = linker.load_module(unquoted_file_path)?.contents;
         for item in imported_module.items.into_iter() {
             module.items.push(item);
         }
@@ -55,11 +55,11 @@ mod test {
     use crate::loader;
 
     fn run_test<T: AsRef<str>>(inputs: &[T], expected: T) {
-        let map: HashMap<String, String> = HashMap::from_iter(
+        let map: HashMap<String, Vec<u8>> = HashMap::from_iter(
             inputs
                 .iter()
                 .enumerate()
-                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string())),
+                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string().into_bytes())),
         );
         let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
         linker.features.push(import);

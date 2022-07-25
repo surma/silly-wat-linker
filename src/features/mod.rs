@@ -2,6 +2,7 @@ use crate::ast::Node;
 use crate::linker::Linker;
 use crate::Result;
 
+pub mod data_import;
 pub mod import;
 pub mod size_adjust;
 pub mod sort;

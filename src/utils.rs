@@ -1,4 +1,4 @@
-use crate::ast::Node;
+use crate::ast::{Item, Node};
 use crate::Result;
 
 /// Returns true if the given node is a top-level "module" node.
@@ -47,6 +47,16 @@ pub fn find_id_attribute(node: &Node) -> Option<&str> {
             node.immediate_attribute_iter()
                 .find(|attr| attr.parse::<usize>().is_ok())
         })
+}
+
+pub fn find_child_node_item_mut<F>(parent_node: &mut Node, f: F) -> Option<&mut Item>
+where
+    F: Fn(&Node) -> bool,
+{
+    parent_node
+        .items
+        .iter_mut()
+        .find(|item| item.as_node().map(|node| f(node)).unwrap_or(false))
 }
 
 #[cfg(test)]
