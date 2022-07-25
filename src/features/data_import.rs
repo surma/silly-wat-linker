@@ -4,31 +4,40 @@ use crate::loader::Loader;
 use crate::utils;
 use crate::Result;
 
-fn is_file_import_node(node: &Node) -> bool {
+fn is_import_node(node: &Node) -> bool {
     node.name == "import"
         && node.items.len() == 2
         && node.items[0].as_attribute().is_some()
         && node.items[1]
             .as_node()
-            .map(|node| node.name == "file")
+            .map(|node| node.name == "raw")
             .unwrap_or(false)
 }
 
-pub fn import(module: &mut Node, linker: &mut Linker) -> Result<()> {
+pub fn data_import(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
-        return Err("Importer pass can only be applied to top-level `module` sexpr.".to_string());
+        return Err("Data importer can only be applied to top-level `module` sexpr.".to_string());
     }
     let mut i = 0;
-    while i < module.items.len() {
+    for node in module.immediate_node_iter_mut() {
+        if node.name != "data" {
+            continue;
+        }
+        for item in node.items.iter_mut() {
+            let node = match item.as_node() {
+                Some(node) if is_import_node(node) => node,
+                _ => continue
+            };
+            let file_path = node.items[1].as_attribute().unwrap();
+
+        }
         let item = &module.items[i];
         i += 1;
         let import_node = match item {
             Item::Node(node) => node,
             _ => continue,
         };
-        if !is_file_import_node(import_node) {
-            continue;
-        }
+    }
 
         // `into_node` guaranteed to not throw by `is_file_import_node`
         let import_node = std::mem::replace(&mut module.items[i - 1], Item::Nothing).into_node();
@@ -38,7 +47,7 @@ pub fn import(module: &mut Node, linker: &mut Linker) -> Result<()> {
             return Err("Import directive expects a string".to_string());
         }
         let unquoted_file_path = &file_path[1..file_path.len() - 1];
-        let imported_module = linker.load_module(unquoted_file_path)?.contents;
+        let imported_module = linker.load_module(unquoted_file_path)?.module;
         for item in imported_module.items.into_iter() {
             module.items.push(item);
         }

@@ -1,0 +1,2 @@
+- Switch loader trait to use AsRef<str>
+-
