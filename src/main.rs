@@ -20,6 +20,7 @@ static PASSES: &[(&str, passes::Pass)] = &[
     ("import", passes::importer::importer),
     ("sort", passes::sorter::sorter),
     ("size_adjust", passes::size_adjust::size_adjust),
+    ("start_merge", passes::start_merge::start_merge),
 ];
 
 #[derive(Parser)]
@@ -55,7 +56,7 @@ struct Args {
     #[clap(
         long = "features",
         name = "FEATURE LIST",
-        default_value = "import, size_adjust, sort"
+        default_value = "import, size_adjust, start_merge, sort"
     )]
     feature_list: String,
 

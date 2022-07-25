@@ -45,24 +45,29 @@ impl Node {
         }
     }
 
+    /// Returns an iterator that iterates over immediate children that are nodes.
     pub fn immediate_node_iter(&self) -> impl DoubleEndedIterator<Item = &Node> {
         self.items.iter().flat_map(|node| node.as_node())
     }
 
+    /// Returns an iterator that iterates over immediate children that are nodes.
     pub fn immediate_node_iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut Node> {
         self.items.iter_mut().flat_map(|node| node.as_node_mut())
     }
 
+    /// Returns an iterator that iterates over immediate children that are attributes.
     pub fn immediate_attribute_iter(&self) -> impl DoubleEndedIterator<Item = &str> {
         self.items.iter().flat_map(|node| node.as_attribute())
     }
 
+    /// Returns an iterator that iterates over immediate children that are attributes.
     pub fn immediate_attribute_iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut String> {
         self.items
             .iter_mut()
             .flat_map(|node| node.as_attribute_mut())
     }
 
+    /// Returns an iterator that iterates over all nodes in the tree.
     pub fn node_iter_mut<'a>(&'a mut self) -> Walker<'a> {
         Walker {
             stack: vec![self as *mut Node],
@@ -70,6 +75,7 @@ impl Node {
         }
     }
 
+    /// Returns an iterator that iterates over all nodes in the tree.
     pub fn node_iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Node> + 'a> {
         let parent_it = [self].into_iter();
         let item_it = self
@@ -80,6 +86,14 @@ impl Node {
             .flatten();
 
         Box::new(parent_it.chain(item_it))
+    }
+
+    /// Appends a new node to the parent node. Node is assumed to be well-formed, i.e. all `depth` values must be set correctly.
+    pub fn append_node(&mut self, mut node: Node) {
+        node.node_iter_mut().for_each(|node| {
+            node.depth += self.depth;
+        });
+        self.items.push(Item::Node(node));
     }
 }
 
@@ -108,6 +122,7 @@ pub enum Item {
 }
 
 impl Item {
+    /// Returns a node only if the item is a node.
     pub fn as_node(&self) -> Option<&Node> {
         match self {
             Item::Node(node) => Some(node),
@@ -115,6 +130,7 @@ impl Item {
         }
     }
 
+    /// Returns a node only if the item is a node.
     pub fn as_node_mut(&mut self) -> Option<&mut Node> {
         match self {
             Item::Node(node) => Some(node),
@@ -122,6 +138,7 @@ impl Item {
         }
     }
 
+    /// Returns the item as a node. Panics if it’s not a node.
     pub fn into_node(self) -> Node {
         match self {
             Item::Node(node) => node,
@@ -129,6 +146,7 @@ impl Item {
         }
     }
 
+    /// Returns true if the item is nothing.
     pub fn is_nothing(&self) -> bool {
         match self {
             Item::Nothing => true,
@@ -136,6 +154,7 @@ impl Item {
         }
     }
 
+    /// Returns a string only if the item is an attribute.
     pub fn as_attribute(&self) -> Option<&str> {
         match self {
             Item::Attribute(attribute) => Some(attribute),
@@ -143,6 +162,7 @@ impl Item {
         }
     }
 
+    /// Returns a string only if the item is an attribute.
     pub fn as_attribute_mut(&mut self) -> Option<&mut String> {
         match self {
             Item::Attribute(attribute) => Some(attribute),
@@ -160,6 +180,7 @@ impl Display for Item {
         }
     }
 }
+
 #[cfg(test)]
 mod test {
     use crate::parser::Parser;

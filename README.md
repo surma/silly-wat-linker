@@ -45,6 +45,10 @@ Adds support for importing another .wat file into the current one.
 
 Automatically adjust the size of `memory` directives to be big enough to hold all active `data` segments. (This feature is also supposed to do the same for `tables` and `elem` segments, but this hasn’t been implemented yet.)
 
+### Start Merger (`start_merge`)
+
+If there are multiple `(start)` directives (which can easily happen in a multi-file project), SWL will create a new, singular start function that calls all the other start functions.
+
 ### Sorter (`sort`)
 
 Sorts all top-level module segments so that imports come first. This feature mostly exists because `wat2wasm` requires imports to come first.
