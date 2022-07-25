@@ -14,7 +14,7 @@ fn is_file_import_node(node: &Node) -> bool {
             .unwrap_or(false)
 }
 
-pub fn importer(module: &mut Node, linker: &mut Linker) -> Result<()> {
+pub fn import(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err("Importer pass can only be applied to top-level `module` sexpr.".to_string());
     }
@@ -62,7 +62,7 @@ mod test {
                 .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string())),
         );
         let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
-        linker.passes.push(importer);
+        linker.features.push(import);
 
         let module = linker.link_file("0").unwrap();
         assert_eq!(format!("{}", module), expected.as_ref().trim());

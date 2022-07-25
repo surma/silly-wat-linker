@@ -2,9 +2,9 @@ use crate::ast::Node;
 use crate::linker::Linker;
 use crate::Result;
 
-pub mod importer;
+pub mod import;
 pub mod size_adjust;
-pub mod sorter;
+pub mod sort;
 pub mod start_merge;
 
-pub type Pass = fn(&mut Node, &mut Linker) -> Result<()>;
+pub type Feature = fn(&mut Node, &mut Linker) -> Result<()>;

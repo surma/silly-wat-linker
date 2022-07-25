@@ -8,19 +8,19 @@ use clap::Parser;
 use anyhow::{anyhow, Result as AnyResult};
 
 mod ast;
+mod features;
 mod linker;
 mod loader;
 mod parser;
-mod passes;
 mod utils;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-static PASSES: &[(&str, passes::Pass)] = &[
-    ("import", passes::importer::importer),
-    ("sort", passes::sorter::sorter),
-    ("size_adjust", passes::size_adjust::size_adjust),
-    ("start_merge", passes::start_merge::start_merge),
+static FEATURES: &[(&str, features::Feature)] = &[
+    ("import", features::import::import),
+    ("sort", features::sort::sort),
+    ("size_adjust", features::size_adjust::size_adjust),
+    ("start_merge", features::start_merge::start_merge),
 ];
 
 #[derive(Parser)]
@@ -65,21 +65,21 @@ struct Args {
     root: Option<String>,
 }
 
-fn feature_list_parser(args: &Args) -> AnyResult<Vec<passes::Pass>> {
-    let list: Vec<AnyResult<passes::Pass>> = args
+fn feature_list_parser(args: &Args) -> AnyResult<Vec<features::Feature>> {
+    let list: Vec<AnyResult<features::Feature>> = args
         .feature_list
         .split(",")
         .map(|item| {
             let name = item.trim();
-            let pass = PASSES
+            let feature = FEATURES
                 .iter()
                 .find(|&&(key, _)| key == name)
-                .map(|&(_, pass)| pass);
-            pass.ok_or(anyhow!("Unknown pass name {}", name))
+                .map(|&(_, feature)| feature);
+            feature.ok_or(anyhow!("Unknown pass name {}", name))
         })
         .collect();
 
-    let result: Vec<passes::Pass> = AnyResult::from_iter(list)?;
+    let result: Vec<features::Feature> = AnyResult::from_iter(list)?;
     Ok(result)
 }
 
@@ -94,8 +94,8 @@ fn main() -> AnyResult<()> {
 
     let loader = loader::FileSystemLoader::new(root);
     let mut linker = linker::Linker::new(Box::new(loader));
-    for pass in feature_list.into_iter() {
-        linker.passes.push(pass);
+    for feature in feature_list.into_iter() {
+        linker.features.push(feature);
     }
 
     let module = if args.input == "-" {

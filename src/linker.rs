@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use crate::ast::Node;
+use crate::features::Feature;
 use crate::loader::{FileSystemLoader, LoadRecord, Loader};
 use crate::parser;
-use crate::passes::Pass;
 use crate::Result;
 
 pub struct Linker {
     loader: Box<dyn Loader>,
     pub(crate) loaded_files: HashMap<String, LoadRecord>,
-    pub passes: Vec<Pass>,
+    pub features: Vec<Feature>,
 }
 
 impl Linker {
@@ -17,7 +17,7 @@ impl Linker {
         Linker {
             loader,
             loaded_files: HashMap::new(),
-            passes: vec![],
+            features: vec![],
         }
     }
 
@@ -32,8 +32,8 @@ impl Linker {
     }
 
     pub fn link_module(&mut self, mut module: Node) -> Result<Node> {
-        for pass in self.passes.clone() {
-            pass(&mut module, self)?;
+        for feature in self.features.clone() {
+            feature(&mut module, self)?;
         }
         Ok(module)
     }

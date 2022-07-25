@@ -9,7 +9,7 @@ pub fn has_import_node(ast: &Node) -> bool {
     ast.node_iter().any(|node| node.name == "import")
 }
 
-pub fn sorter(module: &mut Node, _linker: &mut Linker) -> Result<()> {
+pub fn sort(module: &mut Node, _linker: &mut Linker) -> Result<()> {
     frontload_imports(module)
 }
 
