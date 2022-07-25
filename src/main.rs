@@ -51,22 +51,22 @@ struct Args {
     )]
     wat2wasm_flags: Option<String>,
 
-    /// Comma-separated list of transforms.
+    /// Comma-separated list of features.
     #[clap(
-        long = "transform",
-        name = "TRANSFORMS",
+        long = "features",
+        name = "FEATURE LIST",
         default_value = "import, size_adjust, sort"
     )]
-    transform_list: String,
+    feature_list: String,
 
     /// Root for import path resolution.
     #[clap(short = 'r', long = "root", value_parser)]
     root: Option<String>,
 }
 
-fn transform_list_parser(args: &Args) -> AnyResult<Vec<passes::Pass>> {
+fn feature_list_parser(args: &Args) -> AnyResult<Vec<passes::Pass>> {
     let list: Vec<AnyResult<passes::Pass>> = args
-        .transform_list
+        .feature_list
         .split(",")
         .map(|item| {
             let name = item.trim();
@@ -85,7 +85,7 @@ fn transform_list_parser(args: &Args) -> AnyResult<Vec<passes::Pass>> {
 fn main() -> AnyResult<()> {
     let args = Args::parse();
 
-    let transform_list = transform_list_parser(&args)?;
+    let feature_list = feature_list_parser(&args)?;
 
     let root = args
         .root
@@ -93,7 +93,7 @@ fn main() -> AnyResult<()> {
 
     let loader = loader::FileSystemLoader::new(root);
     let mut linker = linker::Linker::new(Box::new(loader));
-    for pass in transform_list.into_iter() {
+    for pass in feature_list.into_iter() {
         linker.passes.push(pass);
     }
 
