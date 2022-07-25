@@ -103,7 +103,7 @@ mod test {
 
     fn run_test<T: AsRef<str>>(input: T, expected_memory_size: usize) {
         let mut linker = Linker::default();
-        linker.passes.push(size_adjust);
+        linker.features.push(size_adjust);
         let got = linker.link_raw(input).unwrap();
         let memory_node = got
             .immediate_node_iter()

@@ -121,7 +121,7 @@ mod test {
             ),
         };
         let mut linker = Linker::new(Box::new(loader));
-        linker.passes.push(start_merge);
+        linker.features.push(start_merge);
         let got = linker.link_file("0").unwrap();
         let expected = linker.link_file("1").unwrap();
         assert_eq!(format!("{}", got), format!("{}", expected),)
