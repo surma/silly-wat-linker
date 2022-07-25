@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Display, marker::PhantomData};
+use std::{fmt::Display, marker::PhantomData};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -8,8 +8,8 @@ pub struct Node {
 }
 
 pub trait Visitor {
-    fn visit_node(&mut self, node: &mut Node) {}
-    fn visit_attribute(&mut self, attr: &mut String) {}
+    fn visit_node(&mut self, _node: &mut Node) {}
+    fn visit_attribute(&mut self, _attr: &mut String) {}
 }
 
 pub struct Walker<'a> {
@@ -53,7 +53,7 @@ impl Node {
         self.items.iter_mut().flat_map(|node| node.as_node_mut())
     }
 
-    pub fn immediate_attribute_iter(&self) -> impl DoubleEndedIterator<Item = &String> {
+    pub fn immediate_attribute_iter(&self) -> impl DoubleEndedIterator<Item = &str> {
         self.items.iter().flat_map(|node| node.as_attribute())
     }
 
@@ -136,7 +136,7 @@ impl Item {
         }
     }
 
-    pub fn as_attribute(&self) -> Option<&String> {
+    pub fn as_attribute(&self) -> Option<&str> {
         match self {
             Item::Attribute(attribute) => Some(attribute),
             _ => None,

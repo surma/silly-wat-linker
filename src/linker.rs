@@ -22,12 +22,12 @@ impl Linker {
     }
 
     pub fn link_raw<T: AsRef<str>>(&mut self, content: T) -> Result<Node> {
-        let mut module = parser::Parser::new(content).parse()?;
+        let module = parser::Parser::new(content).parse()?;
         self.link_module(module)
     }
 
     pub fn link_file(&mut self, path: &str) -> Result<Node> {
-        let mut module = self.load(path)?.module;
+        let module = self.load(path)?.module;
         self.link_module(module)
     }
 

@@ -2,7 +2,7 @@ use crate::ast::{Item, Node};
 use crate::Result;
 
 pub struct Parser {
-    input: String,
+    input: Vec<char>,
     pos: usize,
     depth: usize,
 }
@@ -12,7 +12,7 @@ static ADDITIONAL_ALLOWED_CHARS: &str = "._-";
 impl Parser {
     pub fn new<T: AsRef<str>>(input: T) -> Parser {
         Parser {
-            input: input.as_ref().to_string(),
+            input: input.as_ref().chars().collect(),
             pos: 0,
             depth: 0,
         }
@@ -23,11 +23,11 @@ impl Parser {
         Ok(node)
     }
 
-    fn remaining_str(&self) -> &str {
+    fn remaining_str(&self) -> String {
         if self.pos > self.input.len() {
-            return "";
+            return "".to_string();
         }
-        &self.input[self.pos..]
+        (&self.input[self.pos..]).iter().collect()
     }
 
     fn parse_node(&mut self) -> Result<Node> {
@@ -72,7 +72,7 @@ impl Parser {
         }
         let end = self.pos;
         self.eat_whitespace()?;
-        Ok(Item::Attribute(String::from(&self.input[start..end])))
+        Ok(Item::Attribute((&self.input[start..end]).iter().collect()))
     }
 
     fn eat_string(&mut self) -> Result<()> {
@@ -91,7 +91,7 @@ impl Parser {
     }
 
     fn is_eof(&self) -> bool {
-        self.pos == self.input.chars().count()
+        self.pos == self.input.len()
     }
 
     fn is_next(&self, expected: &str) -> bool {
@@ -118,15 +118,14 @@ impl Parser {
     fn must_next(&mut self) -> Result<char> {
         let result = self
             .input
-            .chars()
-            .nth(self.pos)
+            .get(self.pos)
             .ok_or("Unexpected EOF".to_string())?;
         self.pos += 1;
-        Ok(result)
+        Ok(result.clone())
     }
 
     fn peek(&mut self) -> Option<char> {
-        self.input.chars().nth(self.pos)
+        self.input.get(self.pos).cloned()
     }
 
     fn must_peek(&mut self) -> Result<char> {
@@ -141,7 +140,7 @@ impl Parser {
             self.pos += 1;
         }
         let end = self.pos;
-        Ok(String::from(&self.input[start..end]))
+        Ok((&self.input[start..end]).iter().collect())
     }
 
     fn eat_whitespace(&mut self) -> Result<()> {

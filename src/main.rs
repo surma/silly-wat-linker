@@ -16,9 +16,10 @@ mod utils;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-static passes: &[(&str, passes::Pass)] = &[
+static PASSES: &[(&str, passes::Pass)] = &[
     ("import", passes::importer::importer),
     ("sort", passes::sorter::sorter),
+    ("size_adjust", passes::size_adjust::size_adjust),
 ];
 
 #[derive(Parser)]
@@ -54,7 +55,7 @@ struct Args {
     #[clap(
         long = "transform",
         name = "TRANSFORMS",
-        default_value = "import, sort"
+        default_value = "import, size_adjust, sort"
     )]
     transform_list: String,
 
@@ -69,7 +70,7 @@ fn transform_list_parser(args: &Args) -> AnyResult<Vec<passes::Pass>> {
         .split(",")
         .map(|item| {
             let name = item.trim();
-            let pass = passes
+            let pass = PASSES
                 .iter()
                 .find(|&&(key, _)| key == name)
                 .map(|&(_, pass)| pass);

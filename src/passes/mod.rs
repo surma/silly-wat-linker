@@ -3,6 +3,7 @@ use crate::linker::Linker;
 use crate::Result;
 
 pub mod importer;
+pub mod size_adjust;
 pub mod sorter;
 
 pub type Pass = fn(&mut Node, &mut Linker) -> Result<()>;
