@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use crate::ast::Node;
 use crate::features::Feature;
@@ -8,7 +8,7 @@ use crate::Result;
 
 pub struct Linker {
     loader: Box<dyn Loader>,
-    pub(crate) loaded_modules: HashMap<String, String>,
+    pub(crate) loaded_modules: HashSet<String>,
     pub features: Vec<Feature>,
 }
 
@@ -16,7 +16,7 @@ impl Linker {
     pub fn new(loader: Box<dyn Loader>) -> Linker {
         Linker {
             loader,
-            loaded_modules: HashMap::new(),
+            loaded_modules: HashSet::new(),
             features: vec![],
         }
     }
@@ -64,8 +64,7 @@ impl Loader for Linker {
             },
             None => {
                 let lr = self.loader.load_raw(path)?;
-                self.loaded_modules
-                    .insert(lr.canonical_path.clone(), lr.canonical_path.clone());
+                self.loaded_modules.insert(lr.canonical_path.clone());
                 lr
             }
         };
