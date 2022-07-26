@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use crate::ast::Node;
+use crate::error::{Result, SWLError};
 use crate::features::Feature;
 use crate::loader::{FileSystemLoader, Loader};
 use crate::parser;
-use crate::Result;
 
 pub struct Linker {
     loader: Box<dyn Loader>,
@@ -69,7 +69,7 @@ impl Loader for Linker {
             contents
         };
 
-        let contents = String::from_utf8(contents).map_err(|err| format!("{}", err))?;
+        let contents = String::from_utf8(contents).map_err(|err| SWLError::Other(err.into()))?;
         let module = parser::Parser::new(contents).parse()?;
         Ok(module)
     }

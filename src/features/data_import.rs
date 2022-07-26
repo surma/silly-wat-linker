@@ -1,8 +1,24 @@
+use thiserror::Error;
+
 use crate::ast::{Item, Node};
+use crate::error::{Result, SWLError};
 use crate::linker::Linker;
 use crate::loader::Loader;
 use crate::utils::{self, find_child_node_item_mut, is_string_literal};
-use crate::Result;
+
+#[derive(Error, Debug)]
+pub enum DataImportError {
+    #[error("Data Importer can only be applied to top-level modules")]
+    NotAModule,
+    #[error("Import directive expected a string literal")]
+    InvalidImport,
+}
+
+impl Into<SWLError> for DataImportError {
+    fn into(self) -> SWLError {
+        SWLError::Other(self.into())
+    }
+}
 
 fn is_import_node(node: &Node) -> bool {
     node.name == "import"
@@ -16,7 +32,7 @@ fn is_import_node(node: &Node) -> bool {
 
 pub fn data_import(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
-        return Err("Data importer can only be applied to top-level `module` sexpr.".to_string());
+        return Err(DataImportError::NotAModule.into());
     }
     for data_node in module.immediate_node_iter_mut() {
         if data_node.name != "data" {
@@ -30,7 +46,7 @@ pub fn data_import(module: &mut Node, linker: &mut Linker) -> Result<()> {
 
         let file_path_attr = import_node.items[0].as_attribute().unwrap();
         if !is_string_literal(file_path_attr) {
-            return Err("Import directive expects a string".to_string());
+            return Err(DataImportError::InvalidImport.into());
         }
         let unquoted_file_path_attr = &file_path_attr[1..file_path_attr.len() - 1];
 

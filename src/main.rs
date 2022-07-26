@@ -8,13 +8,12 @@ use clap::Parser;
 use anyhow::{anyhow, Result as AnyResult};
 
 mod ast;
+mod error;
 mod features;
 mod linker;
 mod loader;
 mod parser;
 mod utils;
-
-pub type Result<T> = std::result::Result<T, String>;
 
 static FEATURES: &[(&str, features::Feature)] = &[
     ("import", features::import::import),
@@ -102,9 +101,9 @@ fn main() -> AnyResult<()> {
     let module = if args.input == "-" {
         let mut content = String::new();
         io::stdin().read_to_string(&mut content)?;
-        linker.link_raw(content).map_err(|err| anyhow!(err))?
+        linker.link_raw(content)?
     } else {
-        linker.link_file(&args.input).map_err(|err| anyhow!(err))?
+        linker.link_file(&args.input)?
     };
     let mut payload = format!("{}", module).into_bytes();
 

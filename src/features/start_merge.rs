@@ -1,13 +1,29 @@
+use thiserror::Error;
+
 use crate::ast::{Item, Node};
+use crate::error::{Result, SWLError};
 use crate::linker::Linker;
 use crate::utils::{self, find_id_attribute};
-use crate::Result;
+
+#[derive(Error, Debug)]
+pub enum StartMergeError {
+    #[error("Sorter can only be applied to top-level modules")]
+    NotAModule,
+    #[error("Start directive is invalid")]
+    InvalidStartDirective,
+}
+
+impl Into<SWLError> for StartMergeError {
+    fn into(self) -> SWLError {
+        SWLError::Other(self.into())
+    }
+}
 
 static SWL_START_FUNC_ID: &str = "$_swl_start_merger";
 
 pub fn start_merge(module: &mut Node, _linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
-        return Err("Start merger only works on module".to_string());
+        return Err(StartMergeError::NotAModule.into());
     }
     let start_directives: Vec<Node> = module
         .items
@@ -37,7 +53,7 @@ pub fn start_merge(module: &mut Node, _linker: &mut Linker) -> Result<()> {
             .map(|node| {
                 find_id_attribute(&node)
                     .map(|s| s.to_string())
-                    .ok_or("Start directive without a valid function id".to_string())
+                    .ok_or::<SWLError>(StartMergeError::InvalidStartDirective.into())
             })
             .collect::<Vec<Result<String>>>(),
     )?;

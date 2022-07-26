@@ -1,5 +1,6 @@
 use crate::ast::{Item, Node};
-use crate::Result;
+use crate::error::{Result, SWLError};
+use crate::parser::ParserError;
 
 /// Returns true if the given node is a top-level "module" node.
 pub fn is_module(a: &Node) -> bool {
@@ -27,11 +28,13 @@ pub fn interpreted_string_length(s: &str) -> Result<usize> {
         if char != '\\' {
             continue;
         }
-        let char = it.next().ok_or("Escape with no character".to_string())?;
+        let char = it
+            .next()
+            .ok_or::<SWLError>(ParserError::InvalidEscapeSequence.into())?;
         match char {
             '0'..='9' => {
                 it.next()
-                    .ok_or("Hex escape with only one digit".to_string())?;
+                    .ok_or::<SWLError>(ParserError::InvalidEscapeSequence.into())?;
             }
             _ => {}
         };

@@ -1,9 +1,23 @@
 use std::cmp::Ordering;
 
+use thiserror::Error;
+
 use crate::ast::{Item, Node};
+use crate::error::{Result, SWLError};
 use crate::linker::Linker;
 use crate::utils;
-use crate::Result;
+
+#[derive(Error, Debug)]
+pub enum SortError {
+    #[error("Sorter can only be applied to top-level modules")]
+    NotAModule,
+}
+
+impl Into<SWLError> for SortError {
+    fn into(self) -> SWLError {
+        SWLError::Other(self.into())
+    }
+}
 
 pub fn has_import_node(ast: &Node) -> bool {
     ast.node_iter().any(|node| node.name == "import")
@@ -15,7 +29,7 @@ pub fn sort(module: &mut Node, _linker: &mut Linker) -> Result<()> {
 
 pub fn frontload_imports(module: &mut Node) -> Result<()> {
     if !utils::is_module(module) {
-        return Err("Can only sort modules".to_string());
+        return Err(SortError::NotAModule.into());
     }
 
     module.items.sort_unstable_by(|a, b| match (a, b) {

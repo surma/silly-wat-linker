@@ -1,11 +1,30 @@
+use thiserror::Error;
+
 use crate::ast::{Item, Node};
+use crate::error::{Result, SWLError};
 use crate::linker::Linker;
 use crate::utils::{self, interpreted_string_length, is_string_literal};
-use crate::Result;
+
+#[derive(Error, Debug)]
+pub enum SizeAdjustError {
+    #[error("Size Adjuster can only be applied to top-level modules")]
+    NotAModule,
+    #[error("Offset is missing expression argument")]
+    InvalidOffset,
+}
+
+impl Into<SWLError> for SizeAdjustError {
+    fn into(self) -> SWLError {
+        SWLError::Other(self.into())
+    }
+}
 
 fn is_active_data_segment(data_seg: &Node) -> Result<bool> {
     if data_seg.name != "data" {
-        return Err(format!("Expected a data segment, found {}", data_seg.name));
+        return Err(SWLError::Simple(format!(
+            "Expected a data segment, found {}",
+            data_seg.name
+        )));
     }
     let has_memory_node = data_seg
         .immediate_node_iter()
@@ -20,7 +39,7 @@ fn is_active_data_segment(data_seg: &Node) -> Result<bool> {
 
 pub fn size_adjust(module: &mut Node, _linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
-        return Err("Memory adjuster only works on module".to_string());
+        return Err(SizeAdjustError::NotAModule.into());
     }
     let mut max_addr = 0;
     for node in module.immediate_node_iter() {
@@ -39,19 +58,16 @@ pub fn size_adjust(module: &mut Node, _linker: &mut Linker) -> Result<()> {
                 if node.name == "offset" {
                     node = node.items[0]
                         .as_node()
-                        .ok_or("offset expects an expression argument".to_string())?;
+                        .ok_or::<SWLError>(SizeAdjustError::InvalidOffset.into())?;
                 }
                 let offset = if node.name == "i32.const" {
                     node.items[0]
                         .as_attribute()
                         .unwrap_or("0")
                         .parse::<usize>()
-                        .map_err(|err| format!("{}", err))?
+                        .map_err(|err| SWLError::Other(err.into()))?
                 } else {
-                    return Err(format!(
-                        "Expected i32.const offset argument, found {}",
-                        node.name
-                    ));
+                    return Err(SWLError::Other(SizeAdjustError::InvalidOffset.into()));
                 };
                 Ok(offset)
             })

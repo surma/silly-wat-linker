@@ -1,6 +1,6 @@
 use crate::ast::Node;
+use crate::error::Result;
 use crate::linker::Linker;
-use crate::Result;
 
 pub mod data_import;
 pub mod import;

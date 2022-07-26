@@ -1,5 +1,18 @@
 use crate::ast::{Item, Node};
-use crate::Result;
+use crate::error::Result;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ParserError {
+    #[error("Unexpected EOF")]
+    UnexpectedEOF,
+    #[error("Stray data: {0}")]
+    StrayData(String),
+    #[error("Unexpected token. Expected {expected}, got {got}")]
+    UnexpectedToken { expected: String, got: String },
+    #[error("Invalid escape sequence in string Litera")]
+    InvalidEscapeSequence,
+}
 
 pub struct Parser {
     input: Vec<char>,
@@ -22,7 +35,7 @@ impl Parser {
         let node = self.parse_node()?;
         self.eat_whitespace()?;
         if self.pos < self.input.len() {
-            return Err(format!("Stray data after module: {}", self.remaining_str()));
+            return Err(ParserError::StrayData(self.remaining_str()).into());
         }
         Ok(node)
     }
@@ -108,22 +121,19 @@ impl Parser {
     fn assert_next(&mut self, expected: &str) -> Result<()> {
         if !self.is_next(expected) {
             let s = self.remaining_str();
-            return Err(format!(
-                "(pos={}) Expected '{}', got '{}'",
-                self.pos,
-                expected,
-                &s[0..s.len().min(expected.len())]
-            ));
+            let got = &s[0..s.len().min(expected.len())];
+            return Err(ParserError::UnexpectedToken {
+                expected: expected.to_string(),
+                got: got.to_string(),
+            }
+            .into());
         }
         self.pos += expected.len();
         Ok(())
     }
 
     fn must_next(&mut self) -> Result<char> {
-        let result = self
-            .input
-            .get(self.pos)
-            .ok_or("Unexpected EOF".to_string())?;
+        let result = self.input.get(self.pos).ok_or(ParserError::UnexpectedEOF)?;
         self.pos += 1;
         Ok(result.clone())
     }
@@ -133,7 +143,7 @@ impl Parser {
     }
 
     fn must_peek(&mut self) -> Result<char> {
-        self.peek().ok_or("Unexpected EOF".to_string())
+        self.peek().ok_or(ParserError::UnexpectedEOF.into())
     }
 
     fn parse_identifier(&mut self) -> Result<String> {
@@ -183,7 +193,9 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
-    use super::Parser;
+    use crate::error::SWLError;
+
+    use super::{Parser, ParserError};
 
     fn parse_and_compare<T: AsRef<str>>(input: T, expected: T) {
         let mut parser = Parser::new(input);
@@ -287,6 +299,9 @@ mod test {
         "#;
 
         let mut parser = Parser::new(input);
-        assert!(parser.parse().is_err());
+        match parser.parse() {
+            Err(SWLError::ParserError(ParserError::StrayData(_))) => {}
+            _ => panic!(),
+        }
     }
 }
