@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::ast::Node;
 use crate::features::Feature;
-use crate::loader::{FileSystemLoader, LoadRecord, Loader};
+use crate::loader::{FileSystemLoader, Loader};
 use crate::parser;
 use crate::Result;
 
@@ -27,7 +27,7 @@ impl Linker {
     }
 
     pub fn link_file(&mut self, path: &str) -> Result<Node> {
-        let module = self.load_module(path)?.contents;
+        let module = self.load_module(path)?;
         self.link_module(module)
     }
 
@@ -48,31 +48,29 @@ impl Default for Linker {
 }
 
 impl Loader for Linker {
-    fn load_raw(&mut self, path: &str) -> Result<LoadRecord<Vec<u8>>> {
+    fn canonicalize(&mut self, path: &str) -> Result<String> {
+        self.loader.canonicalize(path)
+    }
+
+    fn load_raw(&mut self, path: &str) -> Result<Vec<u8>> {
         self.loader.load_raw(path)
     }
 
     // Linker dedupes by returning an empty module when a module is loaded the second time.
     // FIXME: This is not a great way to dedupe.
-    fn load_module(&mut self, path: &str) -> Result<LoadRecord<Node>> {
-        let lr = self.loaded_modules.get(path).cloned();
+    fn load_module(&mut self, path: &str) -> Result<Node> {
+        let canonical_path = self.canonicalize(path)?;
 
-        let lr = match lr {
-            Some(canonical_path) => LoadRecord {
-                contents: "(module)".to_string().into_bytes(),
-                canonical_path,
-            },
-            None => {
-                let lr = self.loader.load_raw(path)?;
-                self.loaded_modules.insert(lr.canonical_path.clone());
-                lr
-            }
+        let contents = if self.loaded_modules.contains(&canonical_path) {
+            "(module)".to_string().into_bytes()
+        } else {
+            let contents = self.loader.load_raw(path)?;
+            self.loaded_modules.insert(canonical_path.clone());
+            contents
         };
 
-        let contents = String::from_utf8(lr.contents).map_err(|err| format!("{}", err))?;
-        Ok(LoadRecord {
-            canonical_path: lr.canonical_path.clone(),
-            contents: parser::Parser::new(contents).parse()?,
-        })
+        let contents = String::from_utf8(contents).map_err(|err| format!("{}", err))?;
+        let module = parser::Parser::new(contents).parse()?;
+        Ok(module)
     }
 }

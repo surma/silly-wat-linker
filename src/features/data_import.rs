@@ -14,14 +14,6 @@ fn is_import_node(node: &Node) -> bool {
             .unwrap_or(false)
 }
 
-fn find_import_node_item(node: &mut Node) -> Option<&mut Item> {
-    node.items.iter_mut().find(|item| {
-        item.as_node()
-            .map(|node| is_import_node(node))
-            .unwrap_or(false)
-    })
-}
-
 pub fn data_import(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err("Data importer can only be applied to top-level `module` sexpr.".to_string());
@@ -36,13 +28,13 @@ pub fn data_import(module: &mut Node, linker: &mut Linker) -> Result<()> {
         };
         let import_node = import_item.as_node_mut().unwrap();
 
-        let file_path = import_node.items[0].as_attribute().unwrap();
-        if !is_string_literal(file_path) {
+        let file_path_attr = import_node.items[0].as_attribute().unwrap();
+        if !is_string_literal(file_path_attr) {
             return Err("Import directive expects a string".to_string());
         }
-        let unquoted_file_path = &file_path[1..file_path.len() - 1];
+        let unquoted_file_path_attr = &file_path_attr[1..file_path_attr.len() - 1];
 
-        let raw_data = linker.load_raw(unquoted_file_path)?.contents;
+        let raw_data = linker.load_raw(unquoted_file_path_attr)?;
         let escaped_data: String = raw_data
             .into_iter()
             .map(|v| format!("\\{:02x}", v))

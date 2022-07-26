@@ -38,7 +38,7 @@ pub fn import(module: &mut Node, linker: &mut Linker) -> Result<()> {
             return Err("Import directive expects a string".to_string());
         }
         let unquoted_file_path = &file_path[1..file_path.len() - 1];
-        let imported_module = linker.load_module(unquoted_file_path)?.contents;
+        let imported_module = linker.load_module(unquoted_file_path)?;
         for item in imported_module.items.into_iter() {
             module.items.push(item);
         }

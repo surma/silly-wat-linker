@@ -6,22 +6,14 @@ use crate::ast::Node;
 use crate::parser::Parser;
 use crate::Result;
 
-#[derive(Debug, Clone)]
-pub struct LoadRecord<T> {
-    pub contents: T,
-    pub canonical_path: String,
-}
-
 pub trait Loader {
-    fn load_raw(&mut self, path: &str) -> Result<LoadRecord<Vec<u8>>>;
-    fn load_module(&mut self, path: &str) -> Result<LoadRecord<Node>> {
-        let record = self.load_raw(path)?;
-        let contents = String::from_utf8(record.contents).map_err(|err| format!("{}", err))?;
+    fn canonicalize(&mut self, path: &str) -> Result<String>;
+    fn load_raw(&mut self, path: &str) -> Result<Vec<u8>>;
+    fn load_module(&mut self, path: &str) -> Result<Node> {
+        let contents = self.load_raw(path)?;
+        let contents = String::from_utf8(contents).map_err(|err| format!("{}", err))?;
         let module = Parser::new(contents).parse()?;
-        Ok(LoadRecord {
-            canonical_path: record.canonical_path,
-            contents: module,
-        })
+        Ok(module)
     }
 }
 
@@ -38,14 +30,15 @@ impl FileSystemLoader {
 }
 
 impl Loader for FileSystemLoader {
-    fn load_raw(&mut self, path: &str) -> Result<LoadRecord<Vec<u8>>> {
+    fn canonicalize(&mut self, path: &str) -> Result<String> {
         let file_path = self.root.join(path);
-        let contents = fs::read(&file_path).map_err(|err| format!("{}", err))?;
-        Ok(LoadRecord {
-            // FIXME: Better non-utf8 handling
-            canonical_path: file_path.to_str().unwrap().to_string(),
-            contents,
-        })
+        Ok(file_path.to_str().unwrap().to_string())
+    }
+
+    fn load_raw(&mut self, path: &str) -> Result<Vec<u8>> {
+        let canonical_path = self.canonicalize(path)?;
+        let contents = fs::read(&canonical_path).map_err(|err| format!("{}", err))?;
+        Ok(contents)
     }
 }
 
@@ -54,16 +47,15 @@ pub struct MockLoader {
 }
 
 impl Loader for MockLoader {
-    fn load_raw(&mut self, path: &str) -> Result<LoadRecord<Vec<u8>>> {
+    fn canonicalize(&mut self, path: &str) -> Result<String> {
+        Ok(path.to_string())
+    }
+    fn load_raw(&mut self, path: &str) -> Result<Vec<u8>> {
         let contents = self
             .map
             .get(path)
             .ok_or(format!("Unknown file {}", path))?
             .clone();
-        Ok(LoadRecord {
-            // FIXME: Better non-utf8 handling
-            canonical_path: path.to_string(),
-            contents,
-        })
+        Ok(contents)
     }
 }
