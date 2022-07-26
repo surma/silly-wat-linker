@@ -1,6 +1,6 @@
 [package]
 name = "silly-wat-linker"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "A tool that makes writing WebAssembly Text files easier."
 repository = "https://github.com/surma/silly-wat-linker"
