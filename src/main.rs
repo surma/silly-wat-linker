@@ -6,6 +6,7 @@ use std::process;
 use clap::Parser;
 
 use anyhow::{anyhow, Result as AnyResult};
+use pretty::pretty_print;
 
 mod ast;
 mod error;
@@ -13,6 +14,7 @@ mod features;
 mod linker;
 mod loader;
 mod parser;
+mod pretty;
 mod utils;
 
 static FEATURES: &[(&str, features::Feature)] = &[
@@ -42,6 +44,10 @@ struct Args {
         value_parser
     )]
     emit_binary: bool,
+
+    /// Pretty-print WAT
+    #[clap(long = "pretty", default_value_t = false, value_parser)]
+    pretty: bool,
 
     /// Additional flags to pass to wat2wasm.
     #[clap(
@@ -128,6 +134,8 @@ fn main() -> AnyResult<()> {
             .take()
             .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?
             .read_to_end(&mut payload)?;
+    } else if args.pretty {
+        payload = pretty_print(&module).into_bytes();
     }
 
     let mut output: Box<dyn Write> = if args.output == "-" {
