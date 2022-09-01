@@ -62,6 +62,18 @@ where
         .find(|item| item.as_node().map(|node| f(node)).unwrap_or(false))
 }
 
+pub fn parse_number_literal<T: AsRef<str>>(
+    v: T,
+) -> std::result::Result<isize, std::num::ParseIntError> {
+    if v.as_ref().starts_with("0x") {
+        isize::from_str_radix(&v.as_ref()[2..], 16)
+    } else if v.as_ref().starts_with("0") {
+        isize::from_str_radix(&v.as_ref()[1..], 8)
+    } else {
+        isize::from_str_radix(v.as_ref(), 10)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

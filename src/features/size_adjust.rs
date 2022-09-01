@@ -3,7 +3,7 @@ use thiserror::Error;
 use crate::ast::{Item, Node};
 use crate::error::{Result, SWLError};
 use crate::linker::Linker;
-use crate::utils::{self, interpreted_string_length, is_string_literal};
+use crate::utils::{self, interpreted_string_length, is_string_literal, parse_number_literal};
 
 #[derive(Error, Debug)]
 pub enum SizeAdjustError {
@@ -60,12 +60,11 @@ pub fn size_adjust(module: &mut Node, _linker: &mut Linker) -> Result<()> {
                         .as_node()
                         .ok_or::<SWLError>(SizeAdjustError::InvalidOffset.into())?;
                 }
-                let offset = if node.name == "i32.const" {
-                    node.items[0]
-                        .as_attribute()
-                        .unwrap_or("0")
-                        .parse::<usize>()
+                let offset: usize = if node.name == "i32.const" {
+                    parse_number_literal(node.items[0].as_attribute().unwrap_or("0"))
                         .map_err(|err| SWLError::Other(err.into()))?
+                        .try_into()
+                        .map_err(|err: std::num::TryFromIntError| SWLError::Other(err.into()))?
                 } else {
                     return Err(SWLError::Other(SizeAdjustError::InvalidOffset.into()));
                 };
@@ -205,6 +204,19 @@ mod test {
             (module
                 (memory $x)
                 (data (i32.const 65536) "1")
+            )
+        "#
+        );
+        run_test(input, 2);
+    }
+
+    #[test]
+    fn hex_data_offset() {
+        let input = format!(
+            r#"
+            (module
+                (memory $x)
+                (data (i32.const 0x10000) "X")
             )
         "#
         );

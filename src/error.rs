@@ -8,7 +8,7 @@ pub enum SWLError {
     ParserError(#[from] ParserError),
     #[error("Something went wrong: {0}")]
     Simple(String),
-    #[error("Something went wrong: {0}")]
+    #[error("Something else went wrong: {0}")]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
