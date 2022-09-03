@@ -1,4 +1,5 @@
 use thiserror::Error;
+use wasm3::WasmType;
 
 use crate::ast::{Item, Node};
 use crate::error::{Result, SWLError};
@@ -30,11 +31,47 @@ fn has_constexprs(node: &Node) -> bool {
     node.node_iter().any(|node| is_constexpr_node(node))
 }
 
+pub trait WasmTypeName {
+    fn wasm_type_name(&self) -> &'static str;
+}
+
+impl WasmTypeName for i32 {
+    fn wasm_type_name(&self) -> &'static str {
+        "i32"
+    }
+}
+
+pub fn eval_expr<V: WasmType + WasmTypeName + Default>(node: &Node, prelude: &str) -> Result<V> {
+    let expr = node
+        .items
+        .get(0)
+        .ok_or::<SWLError>(ConstExprError::ExpressionMissing.into())?;
+
+    let typ = V::default().wasm_type_name();
+
+    let wat = format!(
+        r#"
+            (module
+                {prelude}
+                (func (export "main") (result {typ})
+                    {expr}
+                )
+            )
+        "#,
+        prelude = prelude,
+        expr = expr,
+        typ = typ
+    );
+
+    Ok(utils::run_wat::<V>(&wat)?)
+}
+
 pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err(ConstExprError::NotAModule.into());
     }
-    let globals: String = module
+
+    let prelude: String = module
         .immediate_node_iter()
         .cloned()
         .filter(|node| node.name == "global")
@@ -48,30 +85,11 @@ pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
             continue;
         }
         let typ = node.name.split(".").nth(0).unwrap().to_string();
-        let expr = node
-            .items
-            .get(0)
-            .ok_or::<SWLError>(ConstExprError::ExpressionMissing.into())?;
-        node.name = node.name.strip_suffix("expr").unwrap().to_string();
-
-        let wat = format!(
-            r#"
-            (module
-                {globals}
-                (func (export "main") (result {typ})
-                    {expr}
-                )
-            )
-        "#,
-            globals = globals,
-            expr = expr,
-            typ = typ
-        );
-
         let value = match typ.as_str() {
-            "i32" => format!("{}", utils::run_wat::<i32>(&wat)?),
-            _ => return Err(ConstExprError::UnknownType(typ.to_string()).into()),
+            "i32" => format!("{}", eval_expr::<i32>(node, &prelude)?),
+            _ => return Err(ConstExprError::UnknownType(typ.clone()).into()),
         };
+        node.name = node.name.strip_suffix("expr").unwrap().to_string();
         node.items = vec![Item::Attribute(value)];
     }
     Ok(())
@@ -135,6 +153,25 @@ mod test {
             "#],
             r#"
                 (module (global $OTHER i32 (i32.const 7)) (global $DATA i32 (i32.const 8)) (data (i32.const 12) "lol"))
+            "#,
+        );
+    }
+
+    #[test]
+    fn constexpr_offset() {
+        run_test(
+            &[r#"
+                (module
+                    (i32.store
+                        offset=(i32.constexpr
+                                (i32.add
+                                    (i32.const 8)
+                                    (i32.const 4)))
+                        (i32.const 4)
+                )
+            "#],
+            r#"
+                (module (i32.store offset=12 (i32.const 4)))
             "#,
         );
     }
