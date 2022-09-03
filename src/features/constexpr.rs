@@ -12,6 +12,8 @@ pub enum ConstExprError {
     NotAModule,
     #[error("constexpr is missing an expression")]
     ExpressionMissing,
+    #[error("Unknown constexpr type {0}")]
+    UnknownType(String),
 }
 
 impl Into<SWLError> for ConstExprError {
@@ -32,14 +34,30 @@ pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
         if !is_constexpr_node(node) {
             continue;
         }
-        let typ = node.name.split(".").nth(0).unwrap();
+        let typ = node.name.split(".").nth(0).unwrap().to_string();
         let expr = node
             .items
             .get(0)
             .ok_or::<SWLError>(ConstExprError::ExpressionMissing.into())?;
         node.name = node.name.strip_suffix("expr").unwrap().to_string();
 
-        node.items = vec![Item::Attribute("0".to_string())];
+        let wat = format!(
+            r#"
+            (module
+                (func (export "main") (result {typ})
+                    {expr}
+                )
+            )
+        "#,
+            expr = expr,
+            typ = typ
+        );
+
+        let value = match typ.as_str() {
+            "i32" => format!("{}", utils::run_wat::<i32>(&wat)?),
+            _ => return Err(ConstExprError::UnknownType(typ.to_string()).into()),
+        };
+        node.items = vec![Item::Attribute(value)];
     }
     Ok(())
 }
@@ -67,20 +85,20 @@ mod test {
     }
 
     #[test]
-    fn simple_import() {
+    fn simple_constexpr() {
         run_test(
             &[r#"
                     (module
                         (data
                             (i32.constexpr
                                 (i32.add
-                                    (global.get $DATA)
+                                    (i32.const 8)
                                     (i32.const 4)))
                             "lol")
                     )
                 "#],
             r#"
-                (module (data (i32.const 0) "lol"))
+                (module (data (i32.const 12) "lol"))
             "#,
         );
     }
