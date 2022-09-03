@@ -86,3 +86,22 @@ mod test {
         }
     }
 }
+
+pub fn run_wat<V: wasm3::WasmType>(wat: &str) -> Result<V> {
+    let binary = wat::parse_str(wat).map_err(|err| SWLError::Other(err.into()))?;
+    let env = wasm3::Environment::new().map_err(|err| SWLError::Simple(err.to_string()))?;
+    let rt = env
+        .create_runtime(1024)
+        .map_err(|err| SWLError::Simple(err.to_string()))?;
+
+    let module =
+        wasm3::Module::parse(&env, binary).map_err(|err| SWLError::Simple(err.to_string()))?;
+    let module = rt
+        .load_module(module)
+        .map_err(|err| SWLError::Simple(err.to_string()))?;
+    let f = module
+        .find_function::<(), V>("main")
+        .map_err(|err| SWLError::Simple(err.to_string()))?;
+    let result = f.call().map_err(|err| SWLError::Simple(err.to_string()))?;
+    Ok(result)
+}

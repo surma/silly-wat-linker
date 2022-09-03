@@ -14,3 +14,5 @@ authors = ["Surma <surma@surma.dev>"]
 anyhow = "1.0.58"
 clap = {version = "3.2.14", features = ["derive"] }
 thiserror = "1.0.31"
+wasm3 = "0.3.1"
+wat = "1.0.48"

@@ -52,6 +52,23 @@ Allows you to import other files as data segments.
 )
 ```
 
+### Const Expression (`constexpr`)
+
+Adds const expressions to WAT, allowing evaluation of complex expressions at compile time. Globals that aren’t themselves using const expressions are available.
+
+```wat
+(module
+	(global $DATA_PTR i32 (i32.const 0x4000))
+	(data
+		(i32.constexpr
+			(i32.add
+				(global.get $DATA_PTR)
+				(i32.const 0x100)))
+		"My data")
+	;; ...
+)
+```
+
 ### Size Adjuster (`size_adjust`)
 
 Automatically adjust the size of `memory` directives to be big enough to hold all active `data` segments. (This feature is also supposed to do the same for `tables` and `elem` segments, but this hasn’t been implemented yet.)
