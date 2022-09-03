@@ -26,10 +26,23 @@ fn is_constexpr_node(node: &Node) -> bool {
     node.name.ends_with(".constexpr")
 }
 
+fn has_constexprs(node: &Node) -> bool {
+    node.node_iter().any(|node| is_constexpr_node(node))
+}
+
 pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err(ConstExprError::NotAModule.into());
     }
+    let globals: String = module
+        .immediate_node_iter()
+        .cloned()
+        .filter(|node| node.name == "global")
+        .filter(|node| !has_constexprs(node))
+        .map(|node| format!("{}", node))
+        .collect::<Vec<String>>()
+        .join("\n");
+
     for node in module.node_iter_mut() {
         if !is_constexpr_node(node) {
             continue;
@@ -44,11 +57,13 @@ pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
         let wat = format!(
             r#"
             (module
+                {globals}
                 (func (export "main") (result {typ})
                     {expr}
                 )
             )
         "#,
+            globals = globals,
             expr = expr,
             typ = typ
         );
@@ -88,17 +103,38 @@ mod test {
     fn simple_constexpr() {
         run_test(
             &[r#"
-                    (module
-                        (data
-                            (i32.constexpr
-                                (i32.add
-                                    (i32.const 8)
-                                    (i32.const 4)))
-                            "lol")
-                    )
-                "#],
+                (module
+                    (data
+                        (i32.constexpr
+                            (i32.add
+                                (i32.const 8)
+                                (i32.const 4)))
+                        "lol")
+                )
+            "#],
             r#"
                 (module (data (i32.const 12) "lol"))
+            "#,
+        );
+    }
+
+    #[test]
+    fn constexpr_with_global() {
+        run_test(
+            &[r#"
+                (module
+                    (global $OTHER i32 (i32.constexpr (i32.const 7)))
+                    (global $DATA i32 (i32.const 8))
+                    (data
+                        (i32.constexpr
+                            (i32.add
+                                (global.get $DATA)
+                                (i32.const 4)))
+                        "lol")
+                )
+            "#],
+            r#"
+                (module (global $OTHER i32 (i32.const 7)) (global $DATA i32 (i32.const 8)) (data (i32.const 12) "lol"))
             "#,
         );
     }
