@@ -1,12 +1,10 @@
 use thiserror::Error;
-use wasm3::WasmType;
 
 use crate::ast::{Item, Node};
 use crate::error::{Result, SWLError};
 use crate::eval::eval_expr;
 use crate::linker::Linker;
-use crate::loader::Loader;
-use crate::utils::{self, find_child_node_item_mut, is_string_literal};
+use crate::utils::{self};
 
 #[derive(Error, Debug)]
 pub enum ConstExprError {
@@ -32,6 +30,66 @@ fn has_constexprs(node: &Node) -> bool {
     node.node_iter().any(|node| is_constexpr_node(node))
 }
 
+fn process_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
+    for node in module.node_iter_mut() {
+        if !is_constexpr_node(node) {
+            continue;
+        }
+        let typ = node.name.split(".").nth(0).unwrap().to_string();
+        let value = match typ.as_str() {
+            "i32" => format!("{}", eval_expr::<i32>(node, prelude)?),
+            "i64" => format!("{}", eval_expr::<i64>(node, prelude)?),
+            "f32" => format!("{}", eval_expr::<f32>(node, prelude)?),
+            "f64" => format!("{}", eval_expr::<f64>(node, prelude)?),
+            _ => return Err(ConstExprError::UnknownType(typ.clone()).into()),
+        };
+        node.name = node.name.strip_suffix("expr").unwrap().to_string();
+        node.items = vec![Item::Attribute(value)];
+    }
+    Ok(())
+}
+
+fn is_memop(node: &Node) -> bool {
+    node.name.contains(".store") || node.name.contains(".load")
+}
+
+fn get_memarg(node: &mut Node) -> Option<&mut String> {
+    node.immediate_attribute_iter_mut()
+        .find(|attr| attr.starts_with("offset="))
+}
+
+fn process_offset_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
+    for node in module.node_iter_mut() {
+        if !is_memop(node) {
+            continue;
+        }
+        let memarg = match get_memarg(node) {
+            Some(memarg) => memarg,
+            _ => continue,
+        };
+
+        let expr_str = memarg
+            .split("=")
+            .nth(1)
+            .ok_or::<SWLError>(ConstExprError::ExpressionMissing.into())?;
+        if !expr_str.starts_with("(") {
+            continue;
+        }
+        let expr_node = crate::parser::Parser::new(expr_str).parse()?;
+
+        let typ = expr_node.name.split(".").nth(0).unwrap().to_string();
+        let value = match typ.as_str() {
+            "i32" => format!("{}", eval_expr::<i32>(&expr_node, prelude)?),
+            "i64" => format!("{}", eval_expr::<i64>(&expr_node, prelude)?),
+            "f32" => format!("{}", eval_expr::<f32>(&expr_node, prelude)?),
+            "f64" => format!("{}", eval_expr::<f64>(&expr_node, prelude)?),
+            _ => return Err(ConstExprError::UnknownType(typ.clone()).into()),
+        };
+        *memarg = format!("offset={}", value);
+    }
+    Ok(())
+}
+
 pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err(ConstExprError::NotAModule.into());
@@ -46,21 +104,9 @@ pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
         .collect::<Vec<String>>()
         .join("\n");
 
-    for node in module.node_iter_mut() {
-        if !is_constexpr_node(node) {
-            continue;
-        }
-        let typ = node.name.split(".").nth(0).unwrap().to_string();
-        let value = match typ.as_str() {
-            "i32" => format!("{}", eval_expr::<i32>(node, &prelude)?),
-            "i64" => format!("{}", eval_expr::<i64>(node, &prelude)?),
-            "f32" => format!("{}", eval_expr::<f32>(node, &prelude)?),
-            "f64" => format!("{}", eval_expr::<f64>(node, &prelude)?),
-            _ => return Err(ConstExprError::UnknownType(typ.clone()).into()),
-        };
-        node.name = node.name.strip_suffix("expr").unwrap().to_string();
-        node.items = vec![Item::Attribute(value)];
-    }
+    process_constexpr(module, &prelude)?;
+    process_offset_constexpr(module, &prelude)?;
+
     Ok(())
 }
 
@@ -189,7 +235,7 @@ mod test {
                                 (i32.add
                                     (i32.const 8)
                                     (i32.const 4)))
-                        (i32.const 4)
+                        (i32.const 4))
                 )
             "#],
             r#"

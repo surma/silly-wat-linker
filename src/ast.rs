@@ -1,6 +1,6 @@
 use std::{fmt::Display, marker::PhantomData};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Node {
     pub name: String,
     pub depth: usize,
@@ -114,7 +114,7 @@ impl Display for Node {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Item {
     Nothing,
     Attribute(String),

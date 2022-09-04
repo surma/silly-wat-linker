@@ -75,12 +75,43 @@ impl Parser {
             return Ok(Item::Node(self.parse_node()?));
         }
 
+        self.parse_attribute()
+    }
+
+    fn parse_string_attribute(&mut self) -> Result<Item> {
+        let start = self.pos;
+        self.eat_string()?;
+        let end = self.pos;
+        self.eat_whitespace()?;
+        Ok(Item::Attribute((&self.input[start..end]).iter().collect()))
+    }
+
+    fn eat_parenthesized_keyval_attribute(&mut self) -> Result<()> {
+        self.assert_next("(")?;
+        loop {
+            let c = self.must_peek()?;
+            if c == '(' {
+                self.eat_parenthesized_keyval_attribute()?;
+                continue;
+            }
+            self.pos += 1;
+            if c == ')' {
+                return Ok(());
+            }
+        }
+    }
+
+    fn parse_attribute(&mut self) -> Result<Item> {
+        if self.must_peek()? == '"' {
+            return self.parse_string_attribute();
+        }
+
         let start = self.pos;
         loop {
             let c = self.must_peek()?;
-            if c == '"' {
-                self.eat_string()?;
-                break;
+            if self.is_next("=(") {
+                self.assert_next("=")?;
+                self.eat_parenthesized_keyval_attribute()?;
             } else if c.is_whitespace() || c == ')' {
                 break;
             } else {
@@ -193,7 +224,7 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
-    use crate::error::SWLError;
+    use crate::{ast::Item, error::SWLError};
 
     use super::{Parser, ParserError};
 
@@ -254,6 +285,44 @@ mod test {
         "#
         .trim();
         parse_and_compare(input, expected);
+    }
+
+    #[test]
+    fn named_attributes() {
+        let input = r#"
+            (i32.load offset=4)
+        "#;
+        let node = Parser::new(input).parse().unwrap();
+        assert!(node.items[0] == Item::Attribute("offset=4".to_string()));
+    }
+
+    #[test]
+    fn expr_attributes() {
+        let input = r#"
+            (i32.load offset=(i32.const 4))
+        "#;
+        let node = Parser::new(input).parse().unwrap();
+        assert!(node.items[0] == Item::Attribute("offset=(i32.const 4)".to_string()));
+    }
+
+    #[test]
+    fn expr_attributes_with_newline() {
+        let input = r#"
+            (i32.load offset=(i32.const
+                4))
+        "#
+        .trim();
+        let node = Parser::new(input).parse().unwrap();
+        assert!(
+            node.items[0]
+                == Item::Attribute(
+                    r#"
+            offset=(i32.const
+                4)"#
+                    .trim()
+                    .to_string()
+                )
+        );
     }
 
     #[test]
