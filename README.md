@@ -69,6 +69,21 @@ Adds const expressions to WAT, allowing evaluation of complex expressions at com
 )
 ```
 
+Also supported specifically for the `offset` attribute for `store` and `load` operations:
+
+```wat
+(module
+	(func
+		(i32.store
+			offset=(i32.constexp
+				(i32.add
+					(i32.const 0x123)
+					(i32.const 0x100)))
+			(i32.const 4)))
+	;; ...
+)
+```
+
 ### Size Adjuster (`size_adjust`)
 
 Automatically adjust the size of `memory` directives to be big enough to hold all active `data` segments. (This feature is also supposed to do the same for `tables` and `elem` segments, but this hasn’t been implemented yet.)

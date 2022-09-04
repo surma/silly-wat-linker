@@ -10,6 +10,7 @@ use pretty::pretty_print;
 
 mod ast;
 mod error;
+mod eval;
 mod features;
 mod linker;
 mod loader;
