@@ -3,6 +3,7 @@ use wasm3::WasmType;
 
 use crate::ast::{Item, Node};
 use crate::error::{Result, SWLError};
+use crate::eval::eval_expr;
 use crate::linker::Linker;
 use crate::loader::Loader;
 use crate::utils::{self, find_child_node_item_mut, is_string_literal};
@@ -31,41 +32,6 @@ fn has_constexprs(node: &Node) -> bool {
     node.node_iter().any(|node| is_constexpr_node(node))
 }
 
-pub trait WasmTypeName {
-    fn wasm_type_name(&self) -> &'static str;
-}
-
-impl WasmTypeName for i32 {
-    fn wasm_type_name(&self) -> &'static str {
-        "i32"
-    }
-}
-
-pub fn eval_expr<V: WasmType + WasmTypeName + Default>(node: &Node, prelude: &str) -> Result<V> {
-    let expr = node
-        .items
-        .get(0)
-        .ok_or::<SWLError>(ConstExprError::ExpressionMissing.into())?;
-
-    let typ = V::default().wasm_type_name();
-
-    let wat = format!(
-        r#"
-            (module
-                {prelude}
-                (func (export "main") (result {typ})
-                    {expr}
-                )
-            )
-        "#,
-        prelude = prelude,
-        expr = expr,
-        typ = typ
-    );
-
-    Ok(utils::run_wat::<V>(&wat)?)
-}
-
 pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err(ConstExprError::NotAModule.into());
@@ -87,6 +53,9 @@ pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
         let typ = node.name.split(".").nth(0).unwrap().to_string();
         let value = match typ.as_str() {
             "i32" => format!("{}", eval_expr::<i32>(node, &prelude)?),
+            "i64" => format!("{}", eval_expr::<i64>(node, &prelude)?),
+            "f32" => format!("{}", eval_expr::<f32>(node, &prelude)?),
+            "f64" => format!("{}", eval_expr::<f64>(node, &prelude)?),
             _ => return Err(ConstExprError::UnknownType(typ.clone()).into()),
         };
         node.name = node.name.strip_suffix("expr").unwrap().to_string();
@@ -118,7 +87,60 @@ mod test {
     }
 
     #[test]
-    fn simple_constexpr() {
+    fn simple_constexpr_i64() {
+        run_test(
+            &[r#"
+                (module
+                    (data
+                        (i64.constexpr
+                            (i64.add
+                                (i64.const 8)
+                                (i64.const 4)))
+                        "lol")
+                )
+            "#],
+            r#"
+                (module (data (i64.const 12) "lol"))
+            "#,
+        );
+    }
+
+    #[test]
+    fn simple_constexpr_f32() {
+        run_test(
+            &[r#"
+                (module
+                    (f32.constexpr
+                        (f32.add
+                            (f32.const 8.2)
+                            (f32.const 4.3)))
+                )
+            "#],
+            r#"
+                (module (f32.const 12.5))
+            "#,
+        );
+    }
+
+    #[test]
+    fn simple_constexpr_f64() {
+        run_test(
+            &[r#"
+                (module
+                    (f64.constexpr
+                        (f64.add
+                            (f64.const 8.2)
+                            (f64.const 4.3)))
+                )
+            "#],
+            r#"
+                (module (f64.const 12.5))
+            "#,
+        );
+    }
+
+    #[test]
+    fn simple_constexpr_i32() {
         run_test(
             &[r#"
                 (module
