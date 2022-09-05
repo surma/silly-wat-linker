@@ -25,6 +25,7 @@ static FEATURES: &[(&str, features::Feature)] = &[
     ("start_merge", features::start_merge::start_merge),
     ("data_import", features::data_import::data_import),
     ("constexpr", features::constexpr::constexpr),
+    ("numerals", features::numerals::numerals),
 ];
 
 #[derive(Parser)]
@@ -64,7 +65,7 @@ struct Args {
     #[clap(
         long = "features",
         name = "FEATURE LIST",
-        default_value = "import, data_import, constexpr, size_adjust, start_merge, sort"
+        default_value = "import, numerals, data_import, constexpr, size_adjust, start_merge, sort"
     )]
     feature_list: String,
 
@@ -117,6 +118,7 @@ fn main() -> AnyResult<()> {
 
     if args.emit_binary {
         let mut child = process::Command::new("wat2wasm")
+            .args(args.wat2wasm_flags)
             .arg("--output=-")
             .arg("-")
             .stdin(process::Stdio::piped())
