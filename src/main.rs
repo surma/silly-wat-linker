@@ -1,9 +1,9 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, Write};
 use std::process;
 
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 
 use anyhow::{anyhow, Result as AnyResult};
 use pretty::pretty_print;
@@ -30,7 +30,26 @@ static FEATURES: &[(&str, features::Feature)] = &[
 
 #[derive(Parser)]
 #[clap(author, version, about)]
-struct Args {
+struct CLI {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    Compile(CompileOpts),
+    Format(FormatOpts),
+}
+
+#[derive(Args)]
+struct FormatOpts {
+    /// Files to format
+    #[clap(value_parser)]
+    input: Vec<String>,
+}
+
+#[derive(Args)]
+struct CompileOpts {
     /// Path to input file. "-" means stdin.
     #[clap(value_parser, default_value = "-")]
     input: String,
@@ -52,7 +71,7 @@ struct Args {
     #[clap(long = "pretty", default_value_t = false, value_parser)]
     pretty: bool,
 
-    /// Additional flags to pass to wat2wasm.
+    /// Comma-separated list of additional flags to pass to wat2wasm.
     #[clap(
         long = "wat2wasm-flags",
         requires = "emit-binary",
@@ -74,8 +93,8 @@ struct Args {
     root: Option<String>,
 }
 
-fn feature_list_parser(args: &Args) -> AnyResult<Vec<features::Feature>> {
-    let list: Vec<AnyResult<features::Feature>> = args
+fn feature_list_parser(compile_opts: &CompileOpts) -> AnyResult<Vec<features::Feature>> {
+    let list: Vec<AnyResult<features::Feature>> = compile_opts
         .feature_list
         .split(",")
         .map(|item| {
@@ -93,11 +112,34 @@ fn feature_list_parser(args: &Args) -> AnyResult<Vec<features::Feature>> {
 }
 
 fn main() -> AnyResult<()> {
-    let args = Args::parse();
+    let cli = CLI::parse();
 
-    let feature_list = feature_list_parser(&args)?;
+    match cli.command {
+        Command::Compile(compile_opts) => compile(compile_opts)?,
+        Command::Format(format_opts) => formatter(format_opts)?,
+    };
 
-    let root = args
+    Ok(())
+}
+
+fn formatter(format_opts: FormatOpts) -> AnyResult<()> {
+    for file in &format_opts.input {
+        let mut file = std::fs::File::options().read(true).write(true).open(file)?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf)?;
+        let module = parser::Parser::new(buf).parse()?;
+        let pretty_module = pretty_print(&module);
+        file.rewind()?;
+        file.set_len(0)?;
+        file.write_all(pretty_module.as_bytes())?;
+    }
+    Ok(())
+}
+
+fn compile(compile_opts: CompileOpts) -> AnyResult<()> {
+    let feature_list = feature_list_parser(&compile_opts)?;
+
+    let root = compile_opts
         .root
         .unwrap_or_else(|| env::current_dir().unwrap().to_str().unwrap().to_string());
 
@@ -107,18 +149,23 @@ fn main() -> AnyResult<()> {
         linker.features.push(feature);
     }
 
-    let module = if args.input == "-" {
+    let module = if compile_opts.input == "-" {
         let mut content = String::new();
         io::stdin().read_to_string(&mut content)?;
         linker.link_raw(content)?
     } else {
-        linker.link_file(&args.input)?
+        linker.link_file(&compile_opts.input)?
     };
     let mut payload = format!("{}", module).into_bytes();
 
-    if args.emit_binary {
+    if compile_opts.emit_binary {
         let mut child = process::Command::new("wat2wasm")
-            .args(args.wat2wasm_flags)
+            .args(
+                compile_opts
+                    .wat2wasm_flags
+                    .iter()
+                    .flat_map(|s| s.split(",").map(|s| s.to_string()).collect::<Vec<String>>()),
+            )
             .arg("--output=-")
             .arg("-")
             .stdin(process::Stdio::piped())
@@ -138,14 +185,14 @@ fn main() -> AnyResult<()> {
             .take()
             .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?
             .read_to_end(&mut payload)?;
-    } else if args.pretty {
+    } else if compile_opts.pretty {
         payload = pretty_print(&module).into_bytes();
     }
 
-    let mut output: Box<dyn Write> = if args.output == "-" {
+    let mut output: Box<dyn Write> = if compile_opts.output == "-" {
         Box::new(io::stdout())
     } else {
-        Box::new(File::create(args.output)?)
+        Box::new(File::create(compile_opts.output)?)
     };
 
     output.write_all(&payload)?;
