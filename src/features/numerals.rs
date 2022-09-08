@@ -1,10 +1,8 @@
 use thiserror::Error;
 
-use crate::ast::{Item, Node};
+use crate::ast::Node;
 use crate::error::{Result, SWLError};
-use crate::eval::eval_expr;
 use crate::linker::Linker;
-use crate::utils::{self};
 
 #[derive(Error, Debug)]
 pub enum NumeralsError {
@@ -18,7 +16,7 @@ impl Into<SWLError> for NumeralsError {
     }
 }
 
-pub fn numerals(module: &mut Node, linker: &mut Linker) -> Result<()> {
+pub fn numerals(module: &mut Node, _linker: &mut Linker) -> Result<()> {
     for attr in module
         .node_iter_mut()
         .flat_map(|node| node.immediate_attribute_iter_mut())

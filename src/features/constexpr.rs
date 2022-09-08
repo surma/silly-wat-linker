@@ -4,7 +4,7 @@ use crate::ast::{Item, Node};
 use crate::error::{Result, SWLError};
 use crate::eval::eval_expr;
 use crate::linker::Linker;
-use crate::utils::{self};
+use crate::utils;
 
 #[derive(Error, Debug)]
 pub enum ConstExprError {
@@ -90,7 +90,7 @@ fn process_offset_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn constexpr(module: &mut Node, linker: &mut Linker) -> Result<()> {
+pub fn constexpr(module: &mut Node, _linker: &mut Linker) -> Result<()> {
     if !utils::is_module(module) {
         return Err(ConstExprError::NotAModule.into());
     }

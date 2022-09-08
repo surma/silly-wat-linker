@@ -34,6 +34,7 @@ impl<'a> Iterator for Walker<'a> {
 }
 
 impl Node {
+    #[allow(dead_code)]
     pub fn walk_mut(&mut self, visitor: &mut impl Visitor) {
         visitor.visit_node(self);
         for item in &mut self.items {

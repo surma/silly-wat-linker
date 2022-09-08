@@ -1,4 +1,4 @@
-use crate::error::{Result, SWLError};
+use crate::error::Result;
 
 use crate::parser::ParserError;
 
