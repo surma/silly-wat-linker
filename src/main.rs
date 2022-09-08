@@ -158,32 +158,7 @@ fn compile(compile_opts: CompileOpts) -> AnyResult<()> {
     let mut payload = format!("{}", module).into_bytes();
 
     if compile_opts.emit_binary {
-        let mut child = process::Command::new("wat2wasm")
-            .args(
-                compile_opts
-                    .wat2wasm_flags
-                    .iter()
-                    .flat_map(|s| s.split(",").map(|s| s.to_string()).collect::<Vec<String>>()),
-            )
-            .arg("--output=-")
-            .arg("-")
-            .stdin(process::Stdio::piped())
-            .stdout(process::Stdio::piped())
-            .stderr(process::Stdio::inherit())
-            .spawn()?;
-
-        child
-            .stdin
-            .take()
-            .ok_or(anyhow!("Could not write to wat2wasm’s stdin"))?
-            .write_all(&payload)?;
-
-        payload.clear();
-        child
-            .stdout
-            .take()
-            .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?
-            .read_to_end(&mut payload)?;
+        payload = compile_wat(&payload)?;
     } else if compile_opts.pretty {
         payload = pretty_print(&format!("{}", module))?.into_bytes();
     }
@@ -197,4 +172,9 @@ fn compile(compile_opts: CompileOpts) -> AnyResult<()> {
     output.write_all(&payload)?;
 
     Ok(())
+}
+
+fn compile_wat(wat_str: &[u8]) -> AnyResult<Vec<u8>> {
+    let binary = wat::parse_bytes(wat_str)?;
+    Ok(binary.into())
 }
