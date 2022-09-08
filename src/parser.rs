@@ -138,10 +138,6 @@ impl Parser {
         Ok(())
     }
 
-    fn is_eof(&self) -> bool {
-        self.pos == self.input.len()
-    }
-
     fn is_next(&self, expected: &str) -> bool {
         if self.pos + expected.len() > self.input.len() {
             return false;

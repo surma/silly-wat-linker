@@ -127,8 +127,7 @@ fn formatter(format_opts: FormatOpts) -> AnyResult<()> {
         let mut file = std::fs::File::options().read(true).write(true).open(file)?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
-        let module = parser::Parser::new(buf).parse()?;
-        let pretty_module = pretty_print(&module);
+        let pretty_module = pretty_print(&buf)?;
         file.rewind()?;
         file.set_len(0)?;
         file.write_all(pretty_module.as_bytes())?;
@@ -186,7 +185,7 @@ fn compile(compile_opts: CompileOpts) -> AnyResult<()> {
             .ok_or(anyhow!("Could not read from wat2wasm’s stdout"))?
             .read_to_end(&mut payload)?;
     } else if compile_opts.pretty {
-        payload = pretty_print(&module).into_bytes();
+        payload = pretty_print(&format!("{}", module))?.into_bytes();
     }
 
     let mut output: Box<dyn Write> = if compile_opts.output == "-" {
