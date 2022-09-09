@@ -28,6 +28,7 @@ impl Item {
 }
 
 struct Parser {
+    str_input: String,
     input: Vec<char>,
     pos: usize,
 }
@@ -35,6 +36,7 @@ struct Parser {
 impl Parser {
     fn new(s: &str) -> Parser {
         Parser {
+            str_input: s.to_string(),
             input: s.chars().collect(),
             pos: 0,
         }
@@ -129,7 +131,10 @@ impl Parser {
         if self.pos + expected.len() > self.input.len() {
             return false;
         }
-        self.remaining_str().starts_with(expected)
+        (&self.input[self.pos..(self.pos + expected.len())])
+            .iter()
+            .collect::<String>()
+            .starts_with(expected)
     }
 
     fn assert_next(&mut self, expected: &str) -> Result<()> {

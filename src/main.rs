@@ -159,12 +159,14 @@ fn compile(compile_opts: CompileOpts) -> AnyResult<()> {
     } else {
         linker.link_file(&compile_opts.input)?
     };
-    let mut payload = format!("{}", module).into_bytes();
+    let mut payload = format!("{}", module);
+    if compile_opts.pretty {
+        payload = pretty_print(&payload)?;
+    }
+    let mut payload = payload.into_bytes();
 
     if compile_opts.emit_binary {
         payload = compile_wat(&payload)?;
-    } else if compile_opts.pretty {
-        payload = pretty_print(&format!("{}", module))?.into_bytes();
     }
 
     let mut output: Box<dyn Write> = if compile_opts.output == "-" {
