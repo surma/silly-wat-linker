@@ -5,6 +5,7 @@ use std::io::{self, Read, Seek, Write};
 use clap::{Args, Parser, Subcommand};
 
 use anyhow::{anyhow, Result as AnyResult};
+use error::SWLError;
 use pretty::pretty_print;
 
 mod ast;
@@ -122,11 +123,15 @@ fn main() -> AnyResult<()> {
 }
 
 fn formatter(format_opts: FormatOpts) -> AnyResult<()> {
-    for file in &format_opts.input {
-        let mut file = std::fs::File::options().read(true).write(true).open(file)?;
+    for input_file in &format_opts.input {
+        let mut file = std::fs::File::options()
+            .read(true)
+            .write(true)
+            .open(input_file)?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
-        let pretty_module = pretty_print(&buf)?;
+        let pretty_module = pretty_print(&buf)
+            .map_err(|err| SWLError::Simple(format!("Failure parsing {}: {}", input_file, err)))?;
         file.rewind()?;
         file.set_len(0)?;
         file.write_all(pretty_module.as_bytes())?;

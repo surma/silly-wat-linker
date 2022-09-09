@@ -32,7 +32,7 @@ pub fn frontload_imports(module: &mut Node) -> Result<()> {
         return Err(SortError::NotAModule.into());
     }
 
-    module.items.sort_unstable_by(|a, b| match (a, b) {
+    module.items.sort_by(|a, b| match (a, b) {
         (Item::Node(a), Item::Node(b)) => {
             if has_import_node(a) && !has_import_node(b) {
                 Ordering::Less
@@ -53,9 +53,17 @@ mod test {
     use super::*;
     use crate::parser::Parser;
 
+    fn run_test(input: &str, expected: &str) {
+        let mut parser = Parser::new(input);
+        let mut ast = parser.parse().unwrap();
+        frontload_imports(&mut ast).unwrap();
+        let got = format!("{}", ast);
+        assert_eq!(&got, expected)
+    }
+
     #[test]
-    fn table_test() {
-        let table = [(
+    fn simple() {
+        run_test(
             r#"
                 (module
                     (func $1)
@@ -66,13 +74,21 @@ mod test {
                 (module (func (import "a")) (import "b") (func $1))
             "#
             .trim(),
-        )];
-        for (input, expected) in table {
-            let mut parser = Parser::new(input);
-            let mut ast = parser.parse().unwrap();
-            frontload_imports(&mut ast).unwrap();
-            let got = format!("{}", ast);
-            assert_eq!(&got, expected)
-        }
+        );
+    }
+
+    #[test]
+    fn globals() {
+        run_test(
+            r#"
+                (module
+                    (global i32 (i32.const 3))
+                    (import "b"))
+            "#,
+            r#"
+                (module (import "b") (global i32 (i32.const 3)))
+            "#
+            .trim(),
+        );
     }
 }
