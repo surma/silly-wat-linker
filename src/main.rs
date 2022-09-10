@@ -124,17 +124,22 @@ fn main() -> AnyResult<()> {
 
 fn formatter(format_opts: FormatOpts) -> AnyResult<()> {
     for input_file in &format_opts.input {
-        let mut file = std::fs::File::options()
-            .read(true)
-            .write(true)
-            .open(input_file)?;
+        let mut in_file: Box<dyn std::io::Read> = if input_file == "-" {
+            Box::new(std::io::stdin())
+        } else {
+            Box::new(std::fs::File::options().read(true).open(input_file)?)
+        };
         let mut buf = String::new();
-        file.read_to_string(&mut buf)?;
+        in_file.read_to_string(&mut buf)?;
         let pretty_module = pretty_print(&buf)
             .map_err(|err| SWLError::Simple(format!("Failure parsing {}: {}", input_file, err)))?;
-        file.rewind()?;
-        file.set_len(0)?;
-        file.write_all(pretty_module.as_bytes())?;
+        drop(in_file);
+        let mut out_file: Box<dyn std::io::Write> = if input_file == "-" {
+            Box::new(std::io::stdout())
+        } else {
+            Box::new(std::fs::File::options().write(true).open(input_file)?)
+        };
+        out_file.write_all(pretty_module.as_bytes())?;
     }
     Ok(())
 }
