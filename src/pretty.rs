@@ -28,7 +28,6 @@ impl Item {
 }
 
 struct Parser {
-    str_input: String,
     input: Vec<char>,
     pos: usize,
 }
@@ -36,7 +35,6 @@ struct Parser {
 impl Parser {
     fn new(s: &str) -> Parser {
         Parser {
-            str_input: s.to_string(),
             input: s.chars().collect(),
             pos: 0,
         }
