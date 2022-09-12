@@ -353,8 +353,28 @@ fn pretty_print_line_comment(mut comment: &str, _level: usize, buffer: &mut Stri
         *buffer += comment;
     }
 }
+
+fn trim_empty_lines(lines: &mut Vec<&str>) {
+    while lines
+        .get(0)
+        .map(|line| line.trim().len() == 0)
+        .unwrap_or(false)
+    {
+        lines.remove(0);
+    }
+    while lines
+        .get(lines.len() - 1)
+        .map(|line| line.trim().len() == 0)
+        .unwrap_or(false)
+    {
+        lines.remove(lines.len() - 1);
+    }
+}
+
 fn pretty_print_block_comment(comment: &str, mut level: usize, buffer: &mut String) {
-    let lines: Vec<&str> = comment.split("\n").collect();
+    let mut lines: Vec<&str> = comment.split("\n").collect();
+
+    trim_empty_lines(&mut lines);
     let multiline = lines.len() > 1;
     if multiline {
         *buffer += "(;\n";
@@ -776,6 +796,31 @@ mod test {
             "
                 (local.set $lol
                 \t(i32.const 123))
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn block_comment() {
+        let input = "
+                (module
+                \t(global $HEAP_BASE i32 (i32.const 8192))
+                \t(;
+                \t\tlol
+                \t\tmore
+                \t;)
+                \t(data))
+        ";
+        let expected = unindent(
+            "
+                (module
+                \t(global $HEAP_BASE i32 (i32.const 8192))
+                \t(;
+                \t\tlol
+                \t\tmore
+                \t;)
+                \t(data))
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
