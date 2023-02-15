@@ -2,6 +2,7 @@ use crate::error::Result;
 
 use crate::parser::ParserError;
 
+#[derive(Clone, Debug)]
 enum Item {
     LineComment(String),
     BlockComment(String),
@@ -190,279 +191,310 @@ impl Parser {
 }
 
 pub fn pretty_print(code: &str) -> Result<String> {
-    let items = Parser::new(code).parse()?;
-    let mut buffer: String = String::new();
-    for (idx, item) in items.iter().enumerate() {
-        pretty_print_item(item, 0, &mut buffer);
-        if idx < items.len() - 1 {
-            buffer += "\n";
+    PrettyPrinter::pretty_print(code)
+}
+
+pub struct PrettyPrinter {
+    buffer: String,
+}
+
+impl PrettyPrinter {
+    pub fn new() -> Self {
+        PrettyPrinter {
+            buffer: String::new(),
         }
     }
-    Ok(buffer)
-}
 
-fn has_at_most_one_simple_attribute(items: &[Item]) -> bool {
-    items.len() <= 2
-        && items
-            .get(0)
-            .map(|item| item.as_literal().is_some())
-            .unwrap_or(true)
-        && items
-            .get(1)
-            .map(|item| item.as_literal().is_some())
-            .unwrap_or(true)
-}
+    pub fn finalize(&mut self) -> String {
+        std::mem::replace(&mut self.buffer, String::new())
+    }
 
-fn is_single_line_node_type(items: &[Item]) -> bool {
-    if let Some(lit) = items[0].as_literal() {
-        match lit {
-            "param" | "local" | "export" | "table" | "memory" | "import" | "global" => true,
+    pub fn pretty_print(code: &str) -> Result<String> {
+        let items = Parser::new(code).parse()?;
+        let mut printer = PrettyPrinter::new();
+        for (idx, item) in items.iter().enumerate() {
+            printer.pretty_print_item(item, 0);
+            if idx < items.len() - 1 {
+                printer.buffer += "\n";
+            }
+        }
+        Ok(printer.finalize())
+    }
+
+    fn has_at_most_one_simple_attribute(items: &[Item]) -> bool {
+        items.len() <= 2
+            && items
+                .get(0)
+                .map(|item| item.as_literal().is_some())
+                .unwrap_or(true)
+            && items
+                .get(1)
+                .map(|item| item.as_literal().is_some())
+                .unwrap_or(true)
+    }
+
+    fn is_single_line_node_type(items: &[Item]) -> bool {
+        if let Some(lit) = items[0].as_literal() {
+            match lit {
+                "param" | "local" | "export" | "table" | "memory" | "import" | "global" => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    fn is_function_header_item(item: &Item) -> bool {
+        match item {
+            Item::Parens(items) => ["param", "result"]
+                .into_iter()
+                .any(|name| PrettyPrinter::is_parens_with_ident(items, name)),
+            Item::BlockComment(_) | Item::LineComment(_) => true,
             _ => false,
         }
-    } else {
-        false
-    }
-}
-
-fn is_function_header_item(item: &Item) -> bool {
-    match item {
-        Item::Parens(items) => ["param", "result"]
-            .into_iter()
-            .any(|name| is_paren_with_ident(items, name)),
-        Item::BlockComment(_) | Item::LineComment(_) => true,
-        _ => false,
-    }
-}
-
-fn is_function_first_line_item(item: &Item) -> bool {
-    match item {
-        Item::Literal(lit) => lit.starts_with("$"),
-        Item::Parens(items) => ["export", "import"]
-            .into_iter()
-            .any(|name| is_paren_with_ident(items, name)),
-        Item::BlockComment(_) | Item::LineComment(_) => true,
-        Item::String(_) => false,
-    }
-}
-
-fn item_is_paren_with_ident(v: Option<&&Item>, name: &str) -> bool {
-    v.and_then(|v| v.as_parens())
-        .and_then(|v| v.get(0))
-        .and_then(|v| v.as_literal())
-        .map(|v| v == name)
-        .unwrap_or(false)
-}
-
-fn item_matches_predicate<F>(v: Option<&&Item>, pred: F) -> bool
-where
-    F: Fn(&Item) -> bool,
-{
-    v.map(|v| pred(v)).unwrap_or(false)
-}
-
-fn pretty_print_item_as_single_line(item: &Item, level: usize, buffer: &mut String) {
-    match item {
-        Item::Parens(items) => {
-            pretty_print_parens_as_single_line(items.as_slice(), level + 1, buffer)
-        }
-        Item::Literal(lit) => *buffer += lit.as_str(),
-        Item::BlockComment(comment) => {
-            *buffer += &format!(
-                "(; {} ;)",
-                comment.split("\n").collect::<Vec<&str>>().join(",").trim()
-            )
-        }
-        Item::LineComment(comment) => *buffer += &format!(";; {}\n", comment),
-        Item::String(str) => *buffer += &format!(r#""{}""#, str),
-    }
-}
-
-fn pretty_print_func(items: &[Item], level: usize, buffer: &mut String) {
-    assert!(is_paren_with_ident(items, "func"));
-    *buffer += "(";
-    *buffer += items[0].as_literal().unwrap();
-    let mut it = items.iter().skip(1).peekable();
-
-    let mut had_header_or_locals = false;
-    // Print function name and import/export if any
-    while item_matches_predicate(it.peek(), |v| is_function_first_line_item(v)) {
-        *buffer += " ";
-        pretty_print_item_as_single_line(it.next().unwrap(), level, buffer)
     }
 
-    // Print function header
-    while item_matches_predicate(it.peek(), |v| is_function_header_item(v)) {
-        *buffer += "\n";
-        *buffer += INDENT.repeat(level + 1).as_str();
-        pretty_print_item(it.next().unwrap(), level + 1, buffer);
-        had_header_or_locals = true;
-    }
-
-    // Print locals
-    if item_is_paren_with_ident(it.peek(), "local") {
-        *buffer += "\n";
-        while item_is_paren_with_ident(it.peek(), "local") {
-            *buffer += "\n";
-            *buffer += INDENT.repeat(level + 1).as_str();
-            pretty_print_item(it.next().unwrap(), level + 1, buffer);
-        }
-        had_header_or_locals = true;
-    }
-
-    // Print body
-    if it.peek().is_some() {
-        if had_header_or_locals {
-            *buffer += "\n";
-        }
-        for item in it {
-            *buffer += "\n";
-            *buffer += INDENT.repeat(level + 1).as_str();
-            pretty_print_item(item, level + 1, buffer);
+    fn is_function_first_line_item(item: &Item) -> bool {
+        match item {
+            Item::Literal(lit) => lit.starts_with("$"),
+            Item::Parens(items) => ["export", "import"]
+                .into_iter()
+                .any(|name| PrettyPrinter::is_parens_with_ident(items, name)),
+            Item::BlockComment(_) | Item::LineComment(_) => true,
+            Item::String(_) => false,
         }
     }
-    *buffer += ")"
-}
 
-fn pretty_print_parens_with_id_literal(items: &[Item], level: usize, buffer: &mut String) {
-    *buffer += "(";
-    *buffer += items[0].as_literal().unwrap();
-    let mut start = 1;
-    if let Some(id) = items.get(1).and_then(|item| item.as_literal()) {
-        *buffer += " ";
-        *buffer += id;
-        start = 2;
+    fn item_is_paren_with_ident(v: Option<&&Item>, name: &str) -> bool {
+        v.and_then(|v| v.as_parens())
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.as_literal())
+            .map(|v| v == name)
+            .unwrap_or(false)
     }
-    for item in items.iter().skip(start) {
-        *buffer += "\n";
-        *buffer += INDENT.repeat(level + 1).as_str();
-        pretty_print_item(item, level + 1, buffer);
-    }
-    *buffer += ")";
-}
 
-fn pretty_print_parens_as_single_line(items: &[Item], level: usize, buffer: &mut String) {
-    *buffer += "(";
-    for (idx, item) in items.iter().enumerate() {
-        pretty_print_item_as_single_line(item, level + 1, buffer);
-        if idx < items.len() - 1 {
-            *buffer += " ";
-        }
-    }
-    *buffer += ")";
-}
-
-fn pretty_print_item(item: &Item, level: usize, buffer: &mut String) {
-    match item {
-        Item::BlockComment(comment) => pretty_print_block_comment(comment, level, buffer),
-        Item::LineComment(comment) => pretty_print_line_comment(comment, level, buffer),
-        Item::Literal(lit) => pretty_print_literal(lit, level, buffer),
-        Item::Parens(items) => pretty_print_parens(items.as_slice(), level, buffer),
-        Item::String(_) => pretty_print_item_as_single_line(item, level, buffer),
-    }
-}
-
-fn pretty_print_line_comment(mut comment: &str, _level: usize, buffer: &mut String) {
-    *buffer += ";;";
-    if comment.starts_with(char::is_whitespace) {
-        comment = &comment[1..]
-    }
-    if comment.trim().len() != 0 {
-        *buffer += " ";
-        *buffer += comment;
-    }
-}
-
-fn trim_empty_lines(lines: &mut Vec<&str>) {
-    while lines
-        .get(0)
-        .map(|line| line.trim().len() == 0)
-        .unwrap_or(false)
+    fn item_matches_predicate<F>(v: Option<&&Item>, pred: F) -> bool
+    where
+        F: Fn(&Item) -> bool,
     {
-        lines.remove(0);
-    }
-    while lines
-        .get(lines.len() - 1)
-        .map(|line| line.trim().len() == 0)
-        .unwrap_or(false)
-    {
-        lines.remove(lines.len() - 1);
-    }
-}
-
-fn pretty_print_block_comment(comment: &str, mut level: usize, buffer: &mut String) {
-    let mut lines: Vec<&str> = comment.split("\n").collect();
-
-    trim_empty_lines(&mut lines);
-    let multiline = lines.len() > 1;
-    if multiline {
-        *buffer += "(;\n";
-        level += 1;
-    } else {
-        *buffer += "(; ";
+        v.map(|v| pred(v)).unwrap_or(false)
     }
 
-    for line in lines {
-        if multiline {
-            *buffer += INDENT.repeat(level).as_str();
-        }
-        *buffer += line.trim();
-        if multiline {
-            *buffer += "\n";
+    fn pretty_print_item_as_single_line(&mut self, item: &Item, level: usize) {
+        match item {
+            Item::Parens(items) => {
+                self.pretty_print_parens_as_single_line(items.as_slice(), level + 1)
+            }
+            Item::Literal(lit) => self.buffer += lit.as_str(),
+            Item::BlockComment(comment) => {
+                self.buffer += &format!(
+                    "(; {} ;)",
+                    comment.split("\n").collect::<Vec<&str>>().join(",").trim()
+                )
+            }
+            Item::LineComment(comment) => self.buffer += &format!(";; {}\n", comment),
+            Item::String(str) => self.buffer += &format!(r#""{}""#, str),
         }
     }
-    if multiline {
-        level -= 1;
-        *buffer += INDENT.repeat(level).as_str();
-    } else {
-        *buffer += " ";
+
+    fn pretty_print_func(&mut self, items: &[Item], level: usize) {
+        assert!(PrettyPrinter::is_parens_with_ident(items, "func"));
+        self.buffer += "(";
+        self.buffer += items[0].as_literal().unwrap();
+        let mut it = items.iter().skip(1).peekable();
+
+        let mut had_header_or_locals = false;
+        // Print function name and import/export if any
+        while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
+            PrettyPrinter::is_function_first_line_item(v)
+        }) {
+            self.buffer += " ";
+            self.pretty_print_item_as_single_line(it.next().unwrap(), level)
+        }
+
+        // Print function header
+        while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
+            PrettyPrinter::is_function_header_item(v)
+        }) {
+            self.buffer += "\n";
+            self.buffer += INDENT.repeat(level + 1).as_str();
+            self.pretty_print_item(it.next().unwrap(), level + 1);
+            had_header_or_locals = true;
+        }
+
+        // Print locals
+        if PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
+            self.buffer += "\n";
+            while PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
+                self.buffer += "\n";
+                self.buffer += INDENT.repeat(level + 1).as_str();
+                self.pretty_print_item(it.next().unwrap(), level + 1);
+            }
+            had_header_or_locals = true;
+        }
+
+        // Print body
+        if it.peek().is_some() {
+            if had_header_or_locals {
+                self.buffer += "\n";
+            }
+            for item in it {
+                self.buffer += "\n";
+                self.buffer += INDENT.repeat(level + 1).as_str();
+                self.pretty_print_item(item, level + 1);
+            }
+        }
+        self.buffer += ")"
     }
-    *buffer += ";)";
-}
 
-fn pretty_print_literal(lit: &str, _level: usize, buffer: &mut String) {
-    *buffer += lit;
-}
-
-fn is_paren_with_ident(items: &[Item], ident: &str) -> bool {
-    if let Some(item) = items.get(0) {
-        item.as_literal().map(|lit| lit == ident).unwrap_or(false)
-    } else {
-        false
+    fn pretty_print_parens_with_id_literal(&mut self, items: &[Item], level: usize) {
+        self.buffer += "(";
+        self.buffer += items[0].as_literal().unwrap();
+        let mut start = 1;
+        if let Some(id) = items.get(1).and_then(|item| item.as_literal()) {
+            self.buffer += " ";
+            self.buffer += id;
+            start = 2;
+        }
+        for item in items.iter().skip(start) {
+            self.buffer += "\n";
+            self.buffer += INDENT.repeat(level + 1).as_str();
+            self.pretty_print_item(item, level + 1);
+        }
+        self.buffer += ")";
     }
-}
 
-fn is_parens_type_with_ident(items: &[Item]) -> bool {
-    [
-        "block",
-        "loop",
-        "if",
-        "call",
-        "local.set",
-        "local.tee",
-        "global.set",
-    ]
-    .into_iter()
-    .any(|ident| is_paren_with_ident(items, ident))
-}
+    fn pretty_print_parens_as_single_line(&mut self, items: &[Item], level: usize) {
+        self.buffer += "(";
+        for (idx, item) in items.iter().enumerate() {
+            self.pretty_print_item_as_single_line(item, level + 1);
+            if idx < items.len() - 1 {
+                self.buffer += " ";
+            }
+        }
+        self.buffer += ")";
+    }
 
-fn pretty_print_parens(items: &[Item], level: usize, buffer: &mut String) {
-    if is_single_line_node_type(items) || has_at_most_one_simple_attribute(items) {
-        pretty_print_parens_as_single_line(items, level, buffer);
-    } else if is_paren_with_ident(items, "func") {
-        pretty_print_func(items, level, buffer);
-    } else if is_parens_type_with_ident(items) {
-        pretty_print_parens_with_id_literal(items, level, buffer);
-    } else {
-        *buffer += "(";
+    fn pretty_print_item(&mut self, item: &Item, level: usize) {
+        match item {
+            Item::BlockComment(comment) => self.pretty_print_block_comment(comment, level),
+            Item::LineComment(comment) => self.pretty_print_line_comment(comment, level),
+            Item::Literal(lit) => self.pretty_print_literal(lit, level),
+            Item::Parens(items) => self.pretty_print_parens(items.as_slice(), level),
+            Item::String(_) => self.pretty_print_item_as_single_line(item, level),
+        }
+    }
+
+    fn pretty_print_line_comment(&mut self, mut comment: &str, _level: usize) {
+        self.buffer += ";;";
+        if comment.starts_with(char::is_whitespace) {
+            comment = &comment[1..]
+        }
+        if comment.trim().len() != 0 {
+            self.buffer += " ";
+            self.buffer += comment;
+        }
+    }
+
+    fn trim_empty_lines(lines: &mut Vec<&str>) {
+        while lines
+            .get(0)
+            .map(|line| line.trim().len() == 0)
+            .unwrap_or(false)
+        {
+            lines.remove(0);
+        }
+        while lines
+            .get(lines.len() - 1)
+            .map(|line| line.trim().len() == 0)
+            .unwrap_or(false)
+        {
+            lines.remove(lines.len() - 1);
+        }
+    }
+
+    fn pretty_print_block_comment(&mut self, comment: &str, mut level: usize) {
+        let mut lines: Vec<&str> = comment.split("\n").collect();
+
+        PrettyPrinter::trim_empty_lines(&mut lines);
+        let multiline = lines.len() > 1;
+        if multiline {
+            self.buffer += "(;\n";
+            level += 1;
+        } else {
+            self.buffer += "(; ";
+        }
+
+        for line in lines {
+            if multiline {
+                self.buffer += INDENT.repeat(level).as_str();
+            }
+            self.buffer += line.trim();
+            if multiline {
+                self.buffer += "\n";
+            }
+        }
+        if multiline {
+            level -= 1;
+            self.buffer += INDENT.repeat(level).as_str();
+        } else {
+            self.buffer += " ";
+        }
+        self.buffer += ";)";
+    }
+
+    fn pretty_print_literal(&mut self, lit: &str, _level: usize) {
+        self.buffer += lit;
+    }
+
+    fn is_parens_with_ident(items: &[Item], ident: &str) -> bool {
         if let Some(item) = items.get(0) {
-            pretty_print_item(item, 0, buffer);
+            item.as_literal().map(|lit| lit == ident).unwrap_or(false)
+        } else {
+            false
         }
-        for item in items.iter().skip(1) {
-            *buffer += "\n";
-            *buffer += INDENT.repeat(level + 1).as_str();
-            pretty_print_item(item, level + 1, buffer);
+    }
+
+    fn is_parens_type_with_ident(items: &[Item]) -> bool {
+        [
+            "block",
+            "loop",
+            "if",
+            "call",
+            "local.set",
+            "local.tee",
+            "global.set",
+        ]
+        .into_iter()
+        .any(|ident| PrettyPrinter::is_parens_with_ident(items, ident))
+    }
+
+    fn pretty_print_parens(&mut self, items: &[Item], level: usize) {
+        if PrettyPrinter::is_single_line_node_type(items)
+            || PrettyPrinter::has_at_most_one_simple_attribute(items)
+        {
+            self.pretty_print_parens_as_single_line(items, level);
+        } else if PrettyPrinter::is_parens_with_ident(items, "func") {
+            self.pretty_print_func(items, level);
+        } else if PrettyPrinter::is_parens_type_with_ident(items) {
+            self.pretty_print_parens_with_id_literal(items, level);
+        } else {
+            self.buffer += "(";
+            if let Some(item) = items.get(0) {
+                self.pretty_print_item(item, 0);
+            }
+            for (idx, item) in items.iter().enumerate().skip(1) {
+                self.buffer += "\n";
+                self.buffer += INDENT.repeat(level + 1).as_str();
+                self.pretty_print_item(item, level + 1);
+                if let Some(item) = item.as_parens() {
+                    if PrettyPrinter::is_parens_with_ident(item, "func") && idx != items.len() - 1 {
+                        self.buffer += "\n";
+                    }
+                }
+            }
+            self.buffer += ")";
         }
-        *buffer += ")";
     }
 }
 
@@ -728,6 +760,7 @@ mod test {
                 (module
                 \t(func $x (import \"env\" \"lol\")
                 \t\t(param i32))
+
                 \t(func $main
                 \t\t(call $x
                 \t\t\t(i32.const 4))))
