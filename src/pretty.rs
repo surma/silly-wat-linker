@@ -21,6 +21,20 @@ impl Item {
         }
     }
 
+    fn as_block_comment(&self) -> Option<&str> {
+        match self {
+            Item::BlockComment(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    fn as_line_comment(&self) -> Option<&str> {
+        match self {
+            Item::LineComment(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
     fn as_literal(&self) -> Option<&str> {
         match self {
             Item::Literal(s) => Some(s.as_str()),
@@ -196,12 +210,14 @@ pub fn pretty_print(code: &str) -> Result<String> {
 
 pub struct PrettyPrinter {
     buffer: String,
+    newline_emitted: usize,
 }
 
 impl PrettyPrinter {
     pub fn new() -> Self {
         PrettyPrinter {
             buffer: String::new(),
+            newline_emitted: 0,
         }
     }
 
@@ -223,6 +239,19 @@ impl PrettyPrinter {
 
     fn emit<T: AsRef<str>>(&mut self, v: T) {
         self.buffer += v.as_ref();
+        self.newline_emitted = 0;
+    }
+
+    fn undo_newlines(&mut self) {
+        let n = self.buffer.trim_end_matches("\n").len();
+        self.buffer.truncate(n);
+    }
+
+    fn emit_newlines(&mut self, n: usize) {
+        while self.newline_emitted < n {
+            self.buffer += "\n";
+            self.newline_emitted += 1;
+        }
     }
 
     fn has_at_most_one_simple_attribute(items: &[Item]) -> bool {
@@ -305,7 +334,6 @@ impl PrettyPrinter {
         self.emit(items[0].as_literal().unwrap());
         let mut it = items.iter().skip(1).peekable();
 
-        let mut had_header_or_locals = false;
         // Print function name and import/export if any
         while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
             PrettyPrinter::is_function_first_line_item(v)
@@ -314,38 +342,41 @@ impl PrettyPrinter {
             self.pretty_print_item_as_single_line(it.next().unwrap(), level)
         }
 
+        self.emit_newlines(1);
+
         // Print function header
-        while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
+        if PrettyPrinter::item_matches_predicate(it.peek(), |v| {
             PrettyPrinter::is_function_header_item(v)
         }) {
-            self.emit("\n");
-            self.emit(INDENT.repeat(level + 1).as_str());
-            self.pretty_print_item(it.next().unwrap(), level + 1);
-            had_header_or_locals = true;
+            while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
+                PrettyPrinter::is_function_header_item(v)
+            }) {
+                self.emit(INDENT.repeat(level + 1).as_str());
+                self.pretty_print_item(it.next().unwrap(), level + 1);
+                self.emit_newlines(1);
+            }
+
+            self.emit_newlines(2);
         }
 
         // Print locals
         if PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
-            self.emit("\n");
             while PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
-                self.emit("\n");
                 self.emit(INDENT.repeat(level + 1).as_str());
                 self.pretty_print_item(it.next().unwrap(), level + 1);
+                self.emit_newlines(1);
             }
-            had_header_or_locals = true;
+
+            self.emit_newlines(2);
         }
 
         // Print body
-        if it.peek().is_some() {
-            if had_header_or_locals {
-                self.emit("\n");
-            }
-            for item in it {
-                self.emit("\n");
-                self.emit(INDENT.repeat(level + 1).as_str());
-                self.pretty_print_item(item, level + 1);
-            }
+        for item in it {
+            self.emit(INDENT.repeat(level + 1).as_str());
+            self.pretty_print_item(item, level + 1);
+            self.emit_newlines(1);
         }
+        self.undo_newlines();
         self.emit(")");
     }
 
@@ -485,16 +516,28 @@ impl PrettyPrinter {
             if let Some(item) = items.get(0) {
                 self.pretty_print_item(item, 0);
             }
-            for (idx, item) in items.iter().enumerate().skip(1) {
-                self.emit("\n");
+            for (idx, item) in items.iter().skip(1).enumerate() {
+                self.emit_newlines(1);
+                let is_func = item
+                    .as_parens()
+                    .map(|item| PrettyPrinter::is_parens_with_ident(item, "func"))
+                    .unwrap_or(false);
+                let previous_item_was_comment = items
+                    .get(idx)
+                    .map(|item| {
+                        item.as_block_comment().is_some() || item.as_line_comment().is_some()
+                    })
+                    .unwrap_or(false);
+                if is_func && idx != 0 && !previous_item_was_comment {
+                    self.emit_newlines(2);
+                }
                 self.emit(INDENT.repeat(level + 1).as_str());
                 self.pretty_print_item(item, level + 1);
-                if let Some(item) = item.as_parens() {
-                    if PrettyPrinter::is_parens_with_ident(item, "func") && idx != items.len() - 1 {
-                        self.emit("\n");
-                    }
+                if is_func {
+                    self.emit_newlines(2);
                 }
             }
+            self.undo_newlines();
             self.emit(")");
         }
     }
