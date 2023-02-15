@@ -221,6 +221,10 @@ impl PrettyPrinter {
         Ok(printer.finalize())
     }
 
+    fn emit<T: AsRef<str>>(&mut self, v: T) {
+        self.buffer += v.as_ref();
+    }
+
     fn has_at_most_one_simple_attribute(items: &[Item]) -> bool {
         items.len() <= 2
             && items
@@ -285,22 +289,20 @@ impl PrettyPrinter {
             Item::Parens(items) => {
                 self.pretty_print_parens_as_single_line(items.as_slice(), level + 1)
             }
-            Item::Literal(lit) => self.buffer += lit.as_str(),
-            Item::BlockComment(comment) => {
-                self.buffer += &format!(
-                    "(; {} ;)",
-                    comment.split("\n").collect::<Vec<&str>>().join(",").trim()
-                )
-            }
-            Item::LineComment(comment) => self.buffer += &format!(";; {}\n", comment),
-            Item::String(str) => self.buffer += &format!(r#""{}""#, str),
+            Item::Literal(lit) => self.emit(lit.as_str()),
+            Item::BlockComment(comment) => self.emit(format!(
+                "(; {} ;)",
+                comment.split("\n").collect::<Vec<&str>>().join(",").trim()
+            )),
+            Item::LineComment(comment) => self.emit(format!(");; {}\n", comment)),
+            Item::String(str) => self.emit(format!(r#""{}""#, str)),
         }
     }
 
     fn pretty_print_func(&mut self, items: &[Item], level: usize) {
         assert!(PrettyPrinter::is_parens_with_ident(items, "func"));
-        self.buffer += "(";
-        self.buffer += items[0].as_literal().unwrap();
+        self.emit("(");
+        self.emit(items[0].as_literal().unwrap());
         let mut it = items.iter().skip(1).peekable();
 
         let mut had_header_or_locals = false;
@@ -308,7 +310,7 @@ impl PrettyPrinter {
         while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
             PrettyPrinter::is_function_first_line_item(v)
         }) {
-            self.buffer += " ";
+            self.emit(" ");
             self.pretty_print_item_as_single_line(it.next().unwrap(), level)
         }
 
@@ -316,18 +318,18 @@ impl PrettyPrinter {
         while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
             PrettyPrinter::is_function_header_item(v)
         }) {
-            self.buffer += "\n";
-            self.buffer += INDENT.repeat(level + 1).as_str();
+            self.emit("\n");
+            self.emit(INDENT.repeat(level + 1).as_str());
             self.pretty_print_item(it.next().unwrap(), level + 1);
             had_header_or_locals = true;
         }
 
         // Print locals
         if PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
-            self.buffer += "\n";
+            self.emit("\n");
             while PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
-                self.buffer += "\n";
-                self.buffer += INDENT.repeat(level + 1).as_str();
+                self.emit("\n");
+                self.emit(INDENT.repeat(level + 1).as_str());
                 self.pretty_print_item(it.next().unwrap(), level + 1);
             }
             had_header_or_locals = true;
@@ -336,43 +338,43 @@ impl PrettyPrinter {
         // Print body
         if it.peek().is_some() {
             if had_header_or_locals {
-                self.buffer += "\n";
+                self.emit("\n");
             }
             for item in it {
-                self.buffer += "\n";
-                self.buffer += INDENT.repeat(level + 1).as_str();
+                self.emit("\n");
+                self.emit(INDENT.repeat(level + 1).as_str());
                 self.pretty_print_item(item, level + 1);
             }
         }
-        self.buffer += ")"
+        self.emit(")");
     }
 
     fn pretty_print_parens_with_id_literal(&mut self, items: &[Item], level: usize) {
-        self.buffer += "(";
-        self.buffer += items[0].as_literal().unwrap();
+        self.emit("(");
+        self.emit(items[0].as_literal().unwrap());
         let mut start = 1;
         if let Some(id) = items.get(1).and_then(|item| item.as_literal()) {
-            self.buffer += " ";
-            self.buffer += id;
+            self.emit(" ");
+            self.emit(id);
             start = 2;
         }
         for item in items.iter().skip(start) {
-            self.buffer += "\n";
-            self.buffer += INDENT.repeat(level + 1).as_str();
+            self.emit("\n");
+            self.emit(INDENT.repeat(level + 1).as_str());
             self.pretty_print_item(item, level + 1);
         }
-        self.buffer += ")";
+        self.emit(")");
     }
 
     fn pretty_print_parens_as_single_line(&mut self, items: &[Item], level: usize) {
-        self.buffer += "(";
+        self.emit("(");
         for (idx, item) in items.iter().enumerate() {
             self.pretty_print_item_as_single_line(item, level + 1);
             if idx < items.len() - 1 {
-                self.buffer += " ";
+                self.emit(" ");
             }
         }
-        self.buffer += ")";
+        self.emit(")");
     }
 
     fn pretty_print_item(&mut self, item: &Item, level: usize) {
@@ -386,13 +388,13 @@ impl PrettyPrinter {
     }
 
     fn pretty_print_line_comment(&mut self, mut comment: &str, _level: usize) {
-        self.buffer += ";;";
+        self.emit(";;");
         if comment.starts_with(char::is_whitespace) {
             comment = &comment[1..]
         }
         if comment.trim().len() != 0 {
-            self.buffer += " ";
-            self.buffer += comment;
+            self.emit(" ");
+            self.emit(comment);
         }
     }
 
@@ -419,32 +421,32 @@ impl PrettyPrinter {
         PrettyPrinter::trim_empty_lines(&mut lines);
         let multiline = lines.len() > 1;
         if multiline {
-            self.buffer += "(;\n";
+            self.emit("(;\n");
             level += 1;
         } else {
-            self.buffer += "(; ";
+            self.emit("(; ");
         }
 
         for line in lines {
             if multiline {
-                self.buffer += INDENT.repeat(level).as_str();
+                self.emit(INDENT.repeat(level));
             }
-            self.buffer += line.trim();
+            self.emit(line.trim());
             if multiline {
-                self.buffer += "\n";
+                self.emit("\n");
             }
         }
         if multiline {
             level -= 1;
-            self.buffer += INDENT.repeat(level).as_str();
+            self.emit(INDENT.repeat(level));
         } else {
-            self.buffer += " ";
+            self.emit(" ");
         }
-        self.buffer += ";)";
+        self.emit(";)");
     }
 
     fn pretty_print_literal(&mut self, lit: &str, _level: usize) {
-        self.buffer += lit;
+        self.emit(lit);
     }
 
     fn is_parens_with_ident(items: &[Item], ident: &str) -> bool {
@@ -479,21 +481,21 @@ impl PrettyPrinter {
         } else if PrettyPrinter::is_parens_type_with_ident(items) {
             self.pretty_print_parens_with_id_literal(items, level);
         } else {
-            self.buffer += "(";
+            self.emit("(");
             if let Some(item) = items.get(0) {
                 self.pretty_print_item(item, 0);
             }
             for (idx, item) in items.iter().enumerate().skip(1) {
-                self.buffer += "\n";
-                self.buffer += INDENT.repeat(level + 1).as_str();
+                self.emit("\n");
+                self.emit(INDENT.repeat(level + 1).as_str());
                 self.pretty_print_item(item, level + 1);
                 if let Some(item) = item.as_parens() {
                     if PrettyPrinter::is_parens_with_ident(item, "func") && idx != items.len() - 1 {
-                        self.buffer += "\n";
+                        self.emit("\n");
                     }
                 }
             }
-            self.buffer += ")";
+            self.emit(")");
         }
     }
 }
@@ -594,6 +596,52 @@ mod test {
                 \t\t(i32.add
                 \t\t\t(local.get $a)
                 \t\t\t(local.get $b))))
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn function_spacing() {
+        let input = r#"
+            (module
+                (func $f1 (i32.const 1))
+                (func $f2 (i32.const 2))
+            )
+        "#;
+        let expected = unindent(
+            "
+                (module
+                \t(func $f1
+                \t\t(i32.const 1))
+
+                \t(func $f2
+                \t\t(i32.const 2)))
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn function_spacing2() {
+        let input = r#"
+            (module
+                (memory $mem 1)
+
+                (func $f1 (i32.const 1))
+                (func $f2 (i32.const 2))
+            )
+        "#;
+        let expected = unindent(
+            "
+                (module
+                \t(memory $mem 1)
+            
+                \t(func $f1
+                \t\t(i32.const 1))
+
+                \t(func $f2
+                \t\t(i32.const 2)))
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
