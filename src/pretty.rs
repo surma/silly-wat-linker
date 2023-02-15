@@ -490,6 +490,8 @@ impl PrettyPrinter {
 
     fn is_parens_type_with_ident(items: &[Item]) -> bool {
         [
+            "br",
+            "br_if",
             "block",
             "loop",
             "if",
@@ -968,6 +970,32 @@ mod test {
                 (data
                 \t(i32.const 0)
                 \t\"lol \\\" 123\")
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn branch() {
+        let input = r#"
+            (block $done
+                (loop $continue
+                    (br_if
+                        $done
+                        (i32.eqz (i32.load (i32.const 0))))
+                    (br $continue)
+                )
+            )
+        "#;
+        let expected = unindent(
+            "
+                (block $done
+                \t(loop $continue
+                \t\t(br_if $done
+                \t\t\t(i32.eqz
+                \t\t\t\t(i32.load
+                \t\t\t\t\t(i32.const 0))))
+                \t\t(br $continue)))
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
