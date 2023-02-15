@@ -6,6 +6,7 @@ enum Item {
     LineComment(String),
     BlockComment(String),
     Parens(Box<Vec<Item>>),
+    String(String),
     Literal(String),
 }
 
@@ -54,6 +55,8 @@ impl Parser {
                 items.push(Item::Parens(self.parse_parens()?.into()));
             } else if self.is_next(";;") {
                 items.push(Item::LineComment(self.parse_linecomment()?));
+            } else if self.is_next("\"") {
+                items.push(Item::String(self.parse_string()?));
             } else {
                 items.push(Item::Literal(self.parse_literal()?));
             }
@@ -100,6 +103,20 @@ impl Parser {
             self.pos += 1
         }
         let end = self.pos;
+        Ok((&self.input[start..end]).iter().collect())
+    }
+
+    fn parse_string(&mut self) -> Result<String> {
+        self.assert_next("\"")?;
+        let start = self.pos;
+        while !self.is_next("\"") {
+            if self.is_next("\\") {
+                self.pos += 1;
+            }
+            self.pos += 1;
+        }
+        self.assert_next("\"")?;
+        let end = self.pos - 1;
         Ok((&self.input[start..end]).iter().collect())
     }
 
@@ -224,6 +241,7 @@ fn is_function_first_line_item(item: &Item) -> bool {
             .into_iter()
             .any(|name| is_paren_with_ident(items, name)),
         Item::BlockComment(_) | Item::LineComment(_) => true,
+        Item::String(_) => false,
     }
 }
 
@@ -255,6 +273,7 @@ fn pretty_print_item_as_single_line(item: &Item, level: usize, buffer: &mut Stri
             )
         }
         Item::LineComment(comment) => *buffer += &format!(";; {}\n", comment),
+        Item::String(str) => *buffer += &format!(r#""{}""#, str),
     }
 }
 
@@ -338,6 +357,7 @@ fn pretty_print_item(item: &Item, level: usize, buffer: &mut String) {
         Item::LineComment(comment) => pretty_print_line_comment(comment, level, buffer),
         Item::Literal(lit) => pretty_print_literal(lit, level, buffer),
         Item::Parens(items) => pretty_print_parens(items.as_slice(), level, buffer),
+        Item::String(_) => pretty_print_item_as_single_line(item, level, buffer),
     }
 }
 
@@ -794,6 +814,36 @@ mod test {
             "
                 (local.set $lol
                 \t(i32.const 123))
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn string() {
+        let input = r#"
+            (data (i32.const 0) "lol 123")
+        "#;
+        let expected = unindent(
+            "
+                (data
+                \t(i32.const 0)
+                \t\"lol 123\")
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn escaped_string() {
+        let input = r#"
+            (data (i32.const 0) "lol \" 123")
+        "#;
+        let expected = unindent(
+            "
+                (data
+                \t(i32.const 0)
+                \t\"lol \\\" 123\")
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
