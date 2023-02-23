@@ -14,9 +14,9 @@ pub enum ImportError {
     InvalidImport,
 }
 
-impl Into<SWLError> for ImportError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<ImportError> for SWLError {
+    fn from(val: ImportError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -75,13 +75,13 @@ mod test {
             inputs
                 .iter()
                 .enumerate()
-                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string().into_bytes())),
+                .map(|(idx, str)| (format!("{idx}"), str.as_ref().to_string().into_bytes())),
         );
         let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
         linker.features.push(import);
 
         let module = linker.link_file("0").unwrap();
-        assert_eq!(format!("{}", module), expected.as_ref().trim());
+        assert_eq!(format!("{module}"), expected.as_ref().trim());
     }
 
     #[test]

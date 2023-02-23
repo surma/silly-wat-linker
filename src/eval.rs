@@ -50,11 +50,8 @@ pub fn eval_expr<V: WasmType + WasmTypeName>(node: &Node, prelude: &str) -> Resu
 									{expr}
 							)
 					)
-			"#,
-        prelude = prelude,
-        expr = expr,
-        typ = typ
+			"#
     );
 
-    Ok(utils::run_wat::<V>(&wat)?)
+    utils::run_wat::<V>(&wat)
 }

@@ -16,9 +16,9 @@ pub enum ConstExprError {
     UnknownType(String),
 }
 
-impl Into<SWLError> for ConstExprError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<ConstExprError> for SWLError {
+    fn from(val: ConstExprError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -27,7 +27,7 @@ fn is_constexpr_node(node: &Node) -> bool {
 }
 
 fn has_constexprs(node: &Node) -> bool {
-    node.node_iter().any(|node| is_constexpr_node(node))
+    node.node_iter().any(is_constexpr_node)
 }
 
 fn process_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
@@ -35,7 +35,7 @@ fn process_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
         if !is_constexpr_node(node) {
             continue;
         }
-        let typ = node.name.split(".").nth(0).unwrap().to_string();
+        let typ = node.name.split('.').next().unwrap().to_string();
         let value = match typ.as_str() {
             "i32" => format!("{}", eval_expr::<i32>(node, prelude)?),
             "i64" => format!("{}", eval_expr::<i64>(node, prelude)?),
@@ -69,15 +69,15 @@ fn process_offset_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
         };
 
         let expr_str = memarg
-            .split("=")
+            .split('=')
             .nth(1)
             .ok_or::<SWLError>(ConstExprError::ExpressionMissing.into())?;
-        if !expr_str.starts_with("(") {
+        if !expr_str.starts_with('(') {
             continue;
         }
         let expr_node = crate::parser::Parser::new(expr_str).parse()?;
 
-        let typ = expr_node.name.split(".").nth(0).unwrap().to_string();
+        let typ = expr_node.name.split('.').next().unwrap().to_string();
         let value = match typ.as_str() {
             "i32" => format!("{}", eval_expr::<i32>(&expr_node, prelude)?),
             "i64" => format!("{}", eval_expr::<i64>(&expr_node, prelude)?),
@@ -85,7 +85,7 @@ fn process_offset_constexpr(module: &mut Node, prelude: &str) -> Result<()> {
             "f64" => format!("{}", eval_expr::<f64>(&expr_node, prelude)?),
             _ => return Err(ConstExprError::UnknownType(typ.clone()).into()),
         };
-        *memarg = format!("offset={}", value);
+        *memarg = format!("offset={value}");
     }
     Ok(())
 }
@@ -100,7 +100,7 @@ pub fn constexpr(module: &mut Node, _linker: &mut Linker) -> Result<()> {
         .cloned()
         .filter(|node| node.name == "global")
         .filter(|node| !has_constexprs(node))
-        .map(|node| format!("{}", node))
+        .map(|node| format!("{node}"))
         .collect::<Vec<String>>()
         .join("\n");
 
@@ -123,13 +123,13 @@ mod test {
             inputs
                 .iter()
                 .enumerate()
-                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string().into_bytes())),
+                .map(|(idx, str)| (format!("{idx}"), str.as_ref().to_string().into_bytes())),
         );
         let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
         linker.features.push(constexpr);
 
         let module = linker.link_file("0").unwrap();
-        assert_eq!(format!("{}", module), expected.as_ref().trim());
+        assert_eq!(format!("{module}"), expected.as_ref().trim());
     }
 
     #[test]

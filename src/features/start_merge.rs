@@ -13,9 +13,9 @@ pub enum StartMergeError {
     InvalidStartDirective,
 }
 
-impl Into<SWLError> for StartMergeError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<StartMergeError> for SWLError {
+    fn from(val: StartMergeError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -29,9 +29,7 @@ pub fn start_merge(module: &mut Node, _linker: &mut Linker) -> Result<()> {
         .items
         .iter_mut()
         .flat_map(|item| {
-            if item.as_node().is_none() {
-                return None;
-            }
+            item.as_node()?;
             let node = item.as_node().unwrap();
             if node.name != "start" {
                 return None;
@@ -60,7 +58,7 @@ pub fn start_merge(module: &mut Node, _linker: &mut Linker) -> Result<()> {
 
     // TODO: Maybe add some form of UID?
     let new_start_function = create_start_func(
-        &SWL_START_FUNC_ID,
+        SWL_START_FUNC_ID,
         start_function_ids
             .into_iter()
             .map(|id| {
@@ -82,14 +80,14 @@ pub fn start_merge(module: &mut Node, _linker: &mut Linker) -> Result<()> {
 }
 
 fn create_start_func(id: &str, body: Vec<Item>) -> Node {
-    return Node {
+    Node {
         name: "func".to_string(),
         depth: 0,
-        items: vec![Item::Attribute(format!("{}", id))]
+        items: vec![Item::Attribute(id.to_string())]
             .into_iter()
             .chain(body.into_iter())
             .collect(),
-    };
+    }
 }
 
 #[cfg(test)]
@@ -120,26 +118,25 @@ mod test {
                             (module
                                 (func $t1)
                                 (func $t2)
-                                (func {0}
+                                (func {SWL_START_FUNC_ID}
                                     (call $t1)
                                     (call $t2)
                                 )
-                                (start {0})
+                                (start {SWL_START_FUNC_ID})
                             )
-                        "#,
-                        SWL_START_FUNC_ID
+                        "#
                     )
                     .as_ref(),
                 ]
                 .into_iter()
                 .enumerate()
-                .map(|(idx, code)| (format!("{}", idx), code.to_string().into_bytes())),
+                .map(|(idx, code)| (format!("{idx}"), code.to_string().into_bytes())),
             ),
         };
         let mut linker = Linker::new(Box::new(loader));
         linker.features.push(start_merge);
         let got = linker.link_file("0").unwrap();
         let expected = linker.link_file("1").unwrap();
-        assert_eq!(format!("{}", got), format!("{}", expected),)
+        assert_eq!(format!("{got}"), format!("{expected}"),)
     }
 }

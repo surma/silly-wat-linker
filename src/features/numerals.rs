@@ -10,9 +10,9 @@ pub enum NumeralsError {
     InvalidNumericLiteral(String),
 }
 
-impl Into<SWLError> for NumeralsError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<NumeralsError> for SWLError {
+    fn from(val: NumeralsError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -22,16 +22,16 @@ pub fn numerals(module: &mut Node, _linker: &mut Linker) -> Result<()> {
         .flat_map(|node| node.immediate_attribute_iter_mut())
     {
         if attr.starts_with("0x") {
-            let v = i64::from_str_radix(&attr.replace("_", "")[2..], 16).map_err(|_| {
+            let v = i64::from_str_radix(&attr.replace('_', "")[2..], 16).map_err(|_| {
                 SWLError::Other(NumeralsError::InvalidNumericLiteral(attr.to_string()).into())
             })?;
-            *attr = format!("{}", v);
+            *attr = format!("{v}");
         }
         if attr.starts_with("0b") {
-            let v = i64::from_str_radix(&attr.replace("_", "")[2..], 2).map_err(|_| {
+            let v = i64::from_str_radix(&attr.replace('_', "")[2..], 2).map_err(|_| {
                 SWLError::Other(NumeralsError::InvalidNumericLiteral(attr.to_string()).into())
             })?;
-            *attr = format!("{}", v);
+            *attr = format!("{v}");
         }
     }
     Ok(())
@@ -50,13 +50,13 @@ mod test {
             inputs
                 .iter()
                 .enumerate()
-                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string().into_bytes())),
+                .map(|(idx, str)| (format!("{idx}"), str.as_ref().to_string().into_bytes())),
         );
         let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
         linker.features.push(numerals);
 
         let module = linker.link_file("0").unwrap();
-        assert_eq!(format!("{}", module), expected.as_ref().trim());
+        assert_eq!(format!("{module}"), expected.as_ref().trim());
     }
 
     #[test]

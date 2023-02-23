@@ -6,7 +6,7 @@ use crate::parser::ParserError;
 enum Item {
     LineComment(String),
     BlockComment(String),
-    Parens(Box<Vec<Item>>),
+    Parens(Vec<Item>),
     StringLiteral(String),
     Ident(String),
 }
@@ -74,7 +74,7 @@ impl Parser {
             if self.is_next("(;") {
                 items.push(Item::BlockComment(self.parse_blockcomment()?));
             } else if self.is_next("(") {
-                items.push(Item::Parens(self.parse_parens()?.into()));
+                items.push(Item::Parens(self.parse_parens()?));
             } else if self.is_next(";;") {
                 items.push(Item::LineComment(self.parse_linecomment()?));
             } else if self.is_next("\"") {
@@ -125,7 +125,7 @@ impl Parser {
             self.pos += 1
         }
         let end = self.pos;
-        Ok((&self.input[start..end]).iter().collect())
+        Ok(self.input[start..end].iter().collect())
     }
 
     fn parse_string(&mut self) -> Result<String> {
@@ -139,7 +139,7 @@ impl Parser {
         }
         self.assert_next("\"")?;
         let end = self.pos - 1;
-        Ok((&self.input[start..end]).iter().collect())
+        Ok(self.input[start..end].iter().collect())
     }
 
     fn parse_linecomment(&mut self) -> Result<String> {
@@ -150,7 +150,7 @@ impl Parser {
         }
         self.assert_next("\n")?;
         let end = self.pos - 1;
-        Ok((&self.input[start..end]).iter().collect())
+        Ok(self.input[start..end].iter().collect())
     }
 
     fn parse_blockcomment(&mut self) -> Result<String> {
@@ -161,14 +161,14 @@ impl Parser {
         }
         let end = self.pos - 1;
         self.assert_next(";)")?;
-        Ok((&self.input[start..end]).iter().collect())
+        Ok(self.input[start..end].iter().collect())
     }
 
     fn is_next(&self, expected: &str) -> bool {
         if self.pos + expected.len() > self.input.len() {
             return false;
         }
-        (&self.input[self.pos..(self.pos + expected.len())])
+        self.input[self.pos..(self.pos + expected.len())]
             .iter()
             .collect::<String>()
             .starts_with(expected)
@@ -196,7 +196,7 @@ impl Parser {
         if self.pos > self.input.len() {
             return "".to_string();
         }
-        (&self.input[self.pos..]).iter().collect()
+        self.input[self.pos..].iter().collect()
     }
 
     fn eat_whitespace(&mut self) -> Result<()> {
@@ -229,7 +229,7 @@ impl PrettyPrinter {
     }
 
     pub fn finalize(&mut self) -> String {
-        std::mem::replace(&mut self.buffer, String::new())
+        std::mem::take(&mut self.buffer)
     }
 
     pub fn pretty_print(code: &str) -> Result<String> {
@@ -250,7 +250,7 @@ impl PrettyPrinter {
     }
 
     fn undo_newlines(&mut self) {
-        let n = self.buffer.trim_end_matches("\n").len();
+        let n = self.buffer.trim_end_matches('\n').len();
         self.buffer.truncate(n);
     }
 
@@ -275,10 +275,10 @@ impl PrettyPrinter {
 
     fn is_single_line_node_type(items: &[Item]) -> bool {
         if let Some(lit) = items[0].as_literal() {
-            match lit {
-                "param" | "local" | "export" | "table" | "memory" | "import" | "global" => true,
-                _ => false,
-            }
+            matches!(
+                lit,
+                "param" | "local" | "export" | "table" | "memory" | "import" | "global"
+            )
         } else {
             false
         }
@@ -286,7 +286,7 @@ impl PrettyPrinter {
 
     fn is_function_first_line_item(item: &Item) -> bool {
         match item {
-            Item::Ident(lit) => lit.starts_with("$"),
+            Item::Ident(lit) => lit.starts_with('$'),
             Item::Parens(items) => ["export", "import"]
                 .into_iter()
                 .any(|name| PrettyPrinter::is_parens_with_ident(items, name)),
@@ -310,10 +310,10 @@ impl PrettyPrinter {
             Item::Ident(lit) => self.emit(lit.as_str()),
             Item::BlockComment(comment) => self.emit(format!(
                 "(; {} ;)",
-                comment.split("\n").collect::<Vec<&str>>().join(",").trim()
+                comment.split('\n').collect::<Vec<&str>>().join(",").trim()
             )),
-            Item::LineComment(comment) => self.emit(format!(");; {}\n", comment)),
-            Item::StringLiteral(str) => self.emit(format!(r#""{}""#, str)),
+            Item::LineComment(comment) => self.emit(format!(");; {comment}\n")),
+            Item::StringLiteral(str) => self.emit(format!(r#""{str}""#)),
         }
     }
 
@@ -382,23 +382,21 @@ impl PrettyPrinter {
         if comment.starts_with(char::is_whitespace) {
             comment = &comment[1..]
         }
-        if comment.trim().len() != 0 {
+        if !comment.trim().is_empty() {
             self.emit(" ");
             self.emit(comment);
         }
     }
 
     fn trim_empty_lines(lines: &mut Vec<&str>) {
-        while lines
-            .get(0)
-            .map(|line| line.trim().len() == 0)
+        while lines.first()
+            .map(|line| line.trim().is_empty())
             .unwrap_or(false)
         {
             lines.remove(0);
         }
-        while lines
-            .get(lines.len() - 1)
-            .map(|line| line.trim().len() == 0)
+        while lines.last()
+            .map(|line| line.trim().is_empty())
             .unwrap_or(false)
         {
             lines.remove(lines.len() - 1);
@@ -406,7 +404,7 @@ impl PrettyPrinter {
     }
 
     fn pretty_print_block_comment(&mut self, comment: &str, mut level: usize) {
-        let mut lines: Vec<&str> = comment.split("\n").collect();
+        let mut lines: Vec<&str> = comment.split('\n').collect();
 
         PrettyPrinter::trim_empty_lines(&mut lines);
         let multiline = lines.len() > 1;
@@ -464,16 +462,12 @@ impl PrettyPrinter {
     fn pretty_print_generic_parens(&mut self, items: &[Item], level: usize) {
         let mut it = items.iter().peekable();
         self.emit("(");
-        loop {
-            let item = match it.next() {
-                Some(item) => item,
-                None => break,
-            };
+        while let Some(item) = it.next() {
             self.pretty_print_item(item, level + 1);
             let next_item_is_id = it
                 .peek()
                 .and_then(|item| item.as_literal())
-                .map(|s| s.starts_with("$"))
+                .map(|s| s.starts_with('$'))
                 .unwrap_or(false);
             let next_item_is_string_lit = it
                 .peek()
@@ -517,11 +511,11 @@ mod test {
     use super::*;
 
     fn unindent<T: AsRef<str>>(v: T) -> String {
-        let mut lines: Vec<&str> = v.as_ref().split("\n").collect();
-        if lines[0].trim().len() == 0 {
+        let mut lines: Vec<&str> = v.as_ref().split('\n').collect();
+        if lines[0].trim().is_empty() {
             lines.remove(0);
         }
-        if lines.last().unwrap_or(&"x").trim().len() == 0 {
+        if lines.last().unwrap_or(&"x").trim().is_empty() {
             lines.remove(lines.len() - 1);
         }
         let crop = lines[0].chars().take_while(|c| c.is_whitespace()).count();
@@ -529,7 +523,7 @@ mod test {
         lines
             .into_iter()
             .map(|str| {
-                if str.trim().len() == 0 {
+                if str.trim().is_empty() {
                     ""
                 } else {
                     &str[crop..]

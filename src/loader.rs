@@ -37,7 +37,7 @@ impl Loader for FileSystemLoader {
 
     fn load_raw(&mut self, path: &str) -> Result<Vec<u8>> {
         let canonical_path = self.canonicalize(path)?;
-        let contents = fs::read(&canonical_path).map_err(|err| SWLError::Other(err.into()))?;
+        let contents = fs::read(canonical_path).map_err(|err| SWLError::Other(err.into()))?;
         Ok(contents)
     }
 }
@@ -55,7 +55,7 @@ impl Loader for MockLoader {
         let contents = self
             .map
             .get(path)
-            .ok_or(SWLError::Simple(format!("Unknown file {}", path)))?
+            .ok_or(SWLError::Simple(format!("Unknown file {path}")))?
             .clone();
         Ok(contents)
     }

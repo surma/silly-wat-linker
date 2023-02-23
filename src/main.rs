@@ -30,7 +30,7 @@ static FEATURES: &[(&str, features::Feature)] = &[
 
 #[derive(Parser)]
 #[clap(author, version, about)]
-struct CLI {
+struct Cli {
     #[clap(subcommand)]
     command: Command,
 }
@@ -96,7 +96,7 @@ struct CompileOpts {
 fn feature_list_parser(compile_opts: &CompileOpts) -> AnyResult<Vec<features::Feature>> {
     let list: Vec<AnyResult<features::Feature>> = compile_opts
         .feature_list
-        .split(",")
+        .split(',')
         .map(|item| {
             let name = item.trim();
             let feature = FEATURES
@@ -112,7 +112,7 @@ fn feature_list_parser(compile_opts: &CompileOpts) -> AnyResult<Vec<features::Fe
 }
 
 fn main() -> AnyResult<()> {
-    let cli = CLI::parse();
+    let cli = Cli::parse();
 
     match cli.command {
         Command::Compile(compile_opts) => compile(compile_opts)?,
@@ -132,7 +132,7 @@ fn formatter(format_opts: FormatOpts) -> AnyResult<()> {
         let mut buf = String::new();
         in_file.read_to_string(&mut buf)?;
         let pretty_module = pretty_print(&buf)
-            .map_err(|err| SWLError::Simple(format!("Failure parsing {}: {}", input_file, err)))?;
+            .map_err(|err| SWLError::Simple(format!("Failure parsing {input_file}: {err}")))?;
         drop(in_file);
         let mut out_file: Box<dyn std::io::Write> = if input_file == "-" {
             Box::new(std::io::stdout())
@@ -164,7 +164,7 @@ fn compile(compile_opts: CompileOpts) -> AnyResult<()> {
     } else {
         linker.link_file(&compile_opts.input)?
     };
-    let mut payload = format!("{}", module);
+    let mut payload = format!("{module}");
     if compile_opts.pretty {
         payload = pretty_print(&payload)?;
     }

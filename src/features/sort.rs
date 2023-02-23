@@ -13,9 +13,9 @@ pub enum SortError {
     NotAModule,
 }
 
-impl Into<SWLError> for SortError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<SortError> for SWLError {
+    fn from(val: SortError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -57,7 +57,7 @@ mod test {
         let mut parser = Parser::new(input);
         let mut ast = parser.parse().unwrap();
         frontload_imports(&mut ast).unwrap();
-        let got = format!("{}", ast);
+        let got = format!("{ast}");
         assert_eq!(&got, expected)
     }
 

@@ -44,7 +44,7 @@ impl Parser {
         if self.pos > self.input.len() {
             return "".to_string();
         }
-        (&self.input[self.pos..]).iter().collect()
+        self.input[self.pos..].iter().collect()
     }
 
     fn parse_node(&mut self) -> Result<Node> {
@@ -83,7 +83,7 @@ impl Parser {
         self.eat_string()?;
         let end = self.pos;
         self.eat_whitespace()?;
-        Ok(Item::Attribute((&self.input[start..end]).iter().collect()))
+        Ok(Item::Attribute(self.input[start..end].iter().collect()))
     }
 
     fn eat_parenthesized_keyval_attribute(&mut self) -> Result<()> {
@@ -120,7 +120,7 @@ impl Parser {
         }
         let end = self.pos;
         self.eat_whitespace()?;
-        Ok(Item::Attribute((&self.input[start..end]).iter().collect()))
+        Ok(Item::Attribute(self.input[start..end].iter().collect()))
     }
 
     fn eat_string(&mut self) -> Result<()> {
@@ -142,7 +142,7 @@ impl Parser {
         if self.pos + expected.len() > self.input.len() {
             return false;
         }
-        (&self.input[self.pos..(self.pos + expected.len())])
+        self.input[self.pos..(self.pos + expected.len())]
             .iter()
             .collect::<String>()
             .starts_with(expected)
@@ -165,7 +165,7 @@ impl Parser {
     fn must_next(&mut self) -> Result<char> {
         let result = self.input.get(self.pos).ok_or(ParserError::UnexpectedEOF)?;
         self.pos += 1;
-        Ok(result.clone())
+        Ok(*result)
     }
 
     fn peek(&mut self) -> Option<char> {
@@ -184,7 +184,7 @@ impl Parser {
             self.pos += 1;
         }
         let end = self.pos;
-        Ok((&self.input[start..end]).iter().collect())
+        Ok(self.input[start..end].iter().collect())
     }
 
     fn eat_whitespace(&mut self) -> Result<()> {
@@ -230,7 +230,7 @@ mod test {
     fn parse_and_compare<T: AsRef<str>>(input: T, expected: T) {
         let mut parser = Parser::new(input);
         let ast = parser.parse().unwrap();
-        assert_eq!(&format!("{}", ast), expected.as_ref())
+        assert_eq!(&format!("{ast}"), expected.as_ref())
     }
 
     #[test]

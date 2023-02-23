@@ -12,7 +12,7 @@ pub fn is_string_literal(s: &str) -> bool {
     if s.len() <= 2 {
         return false;
     }
-    s.chars().nth(0).unwrap() == '"' && s.chars().nth(s.len() - 1).unwrap() == '"'
+    s.starts_with('\"') && s.chars().nth(s.len() - 1).unwrap() == '"'
 }
 
 /// Returns the number of bytes a string needs in memory. Handles single-letter escape sequences and dual-digit hexadecimal escape sequences.
@@ -31,13 +31,10 @@ pub fn interpreted_string_length(s: &str) -> Result<usize> {
         let char = it
             .next()
             .ok_or::<SWLError>(ParserError::InvalidEscapeSequence.into())?;
-        match char {
-            '0'..='9' => {
-                it.next()
-                    .ok_or::<SWLError>(ParserError::InvalidEscapeSequence.into())?;
-            }
-            _ => {}
-        };
+        if char.is_ascii_digit() {
+            it.next()
+                .ok_or::<SWLError>(ParserError::InvalidEscapeSequence.into())?;
+        }
     }
     Ok(count)
 }
@@ -45,21 +42,21 @@ pub fn interpreted_string_length(s: &str) -> Result<usize> {
 /// Finds the ID attribute of a node. Named IDs (like “$x”) get preference over numeric IDs.
 pub fn find_id_attribute(node: &Node) -> Option<&str> {
     node.immediate_attribute_iter()
-        .find(|attr| attr.starts_with("$"))
+        .find(|attr| attr.starts_with('$'))
         .or_else(|| {
             node.immediate_attribute_iter()
                 .find(|attr| attr.parse::<usize>().is_ok())
         })
 }
 
-pub fn find_child_node_item_mut<F>(parent_node: &mut Node, f: F) -> Option<&mut Item>
+pub fn find_child_node_item_mut<F>(parent_node: &mut Node, mut f: F) -> Option<&mut Item>
 where
     F: Fn(&Node) -> bool,
 {
     parent_node
         .items
         .iter_mut()
-        .find(|item| item.as_node().map(|node| f(node)).unwrap_or(false))
+        .find(|item| item.as_node().map(&mut f).unwrap_or(false))
 }
 
 pub fn parse_number_literal<T: AsRef<str>>(
@@ -67,10 +64,10 @@ pub fn parse_number_literal<T: AsRef<str>>(
 ) -> std::result::Result<isize, std::num::ParseIntError> {
     if v.as_ref().starts_with("0x") {
         isize::from_str_radix(&v.as_ref()[2..], 16)
-    } else if v.as_ref().starts_with("0") {
+    } else if v.as_ref().starts_with('0') {
         isize::from_str_radix(&v.as_ref()[1..], 8)
     } else {
-        isize::from_str_radix(v.as_ref(), 10)
+        v.as_ref().parse::<isize>()
     }
 }
 

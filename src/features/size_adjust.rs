@@ -13,9 +13,9 @@ pub enum SizeAdjustError {
     InvalidOffset,
 }
 
-impl Into<SWLError> for SizeAdjustError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<SizeAdjustError> for SWLError {
+    fn from(val: SizeAdjustError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -28,12 +28,10 @@ fn is_active_data_segment(data_seg: &Node) -> Result<bool> {
     }
     let has_memory_node = data_seg
         .immediate_node_iter()
-        .find(|node| node.name == "memory")
-        .is_some();
+        .any(|node| node.name == "memory");
     let has_offset_node = data_seg
         .immediate_node_iter()
-        .find(|node| node.name == "offset" || node.name == "i32.const")
-        .is_some();
+        .any(|node| node.name == "offset" || node.name == "i32.const");
     Ok(has_memory_node || has_offset_node)
 }
 
@@ -97,11 +95,11 @@ pub fn size_adjust(module: &mut Node, _linker: &mut Linker) -> Result<()> {
     }
 
     if let Some(memory_size_attribute) = memory_size_attribute {
-        *memory_size_attribute = format!("{}", num_pages)
+        *memory_size_attribute = format!("{num_pages}")
     } else {
         memory_node
             .items
-            .push(Item::Attribute(format!("{}", num_pages)))
+            .push(Item::Attribute(format!("{num_pages}")))
     }
 
     Ok(())
@@ -159,27 +157,23 @@ mod test {
     #[test]
 
     fn offset_data_test() {
-        let input = format!(
-            r#"
+        let input = r#"
             (module
                 (memory $x)
                 (data (memory $x) (offset (i32.const 65534)) "123")
             )
-        "#
-        );
+        "#.to_string();
         run_test(input, 2);
     }
 
     #[test]
     fn implicit_offset_data_test() {
-        let input = format!(
-            r#"
+        let input = r#"
             (module
                 (memory $x)
                 (data (memory $x) (i32.const 65534) "123")
             )
-        "#
-        );
+        "#.to_string();
         run_test(input, 2);
     }
 
@@ -199,27 +193,23 @@ mod test {
 
     #[test]
     fn implicit_memory_data_test() {
-        let input = format!(
-            r#"
+        let input = r#"
             (module
                 (memory $x)
                 (data (i32.const 65536) "1")
             )
-        "#
-        );
+        "#.to_string();
         run_test(input, 2);
     }
 
     #[test]
     fn hex_data_offset() {
-        let input = format!(
-            r#"
+        let input = r#"
             (module
                 (memory $x)
                 (data (i32.const 0x10000) "X")
             )
-        "#
-        );
+        "#.to_string();
         run_test(input, 2);
     }
 }

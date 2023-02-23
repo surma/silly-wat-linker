@@ -14,9 +14,9 @@ pub enum DataImportError {
     InvalidImport,
 }
 
-impl Into<SWLError> for DataImportError {
-    fn into(self) -> SWLError {
-        SWLError::Other(self.into())
+impl From<DataImportError> for SWLError {
+    fn from(val: DataImportError) -> Self {
+        SWLError::Other(val.into())
     }
 }
 
@@ -53,10 +53,10 @@ pub fn data_import(module: &mut Node, linker: &mut Linker) -> Result<()> {
         let raw_data = linker.load_raw(unquoted_file_path_attr)?;
         let escaped_data: String = raw_data
             .into_iter()
-            .map(|v| format!("\\{:02x}", v))
+            .map(|v| format!("\\{v:02x}"))
             .collect::<Vec<String>>()
             .join("");
-        *import_item = Item::Attribute(format!(r#""{}""#, escaped_data));
+        *import_item = Item::Attribute(format!(r#""{escaped_data}""#));
     }
     Ok(())
 }
@@ -74,13 +74,13 @@ mod test {
             inputs
                 .iter()
                 .enumerate()
-                .map(|(idx, str)| (format!("{}", idx), str.as_ref().to_string().into_bytes())),
+                .map(|(idx, str)| (format!("{idx}"), str.as_ref().to_string().into_bytes())),
         );
         let mut linker = linker::Linker::new(Box::new(loader::MockLoader { map }));
         linker.features.push(data_import);
 
         let module = linker.link_file("0").unwrap();
-        assert_eq!(format!("{}", module), expected.as_ref().trim());
+        assert_eq!(format!("{module}"), expected.as_ref().trim());
     }
 
     #[test]

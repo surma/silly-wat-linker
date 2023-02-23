@@ -65,7 +65,7 @@ impl Loader for Linker {
             "(module)".to_string().into_bytes()
         } else {
             let contents = self.loader.load_raw(path)?;
-            self.loaded_modules.insert(canonical_path.clone());
+            self.loaded_modules.insert(canonical_path);
             contents
         };
 

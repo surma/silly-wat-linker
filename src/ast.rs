@@ -69,7 +69,7 @@ impl Node {
     }
 
     /// Returns an iterator that iterates over all nodes in the tree.
-    pub fn node_iter_mut<'a>(&'a mut self) -> Walker<'a> {
+    pub fn node_iter_mut(&mut self) -> Walker<'_> {
         Walker {
             stack: vec![self as *mut Node],
             _lifetime: Default::default(),
@@ -83,8 +83,7 @@ impl Node {
             .items
             .iter()
             .flat_map(|item| item.as_node())
-            .map(|node| node.node_iter())
-            .flatten();
+            .flat_map(|node| node.node_iter());
 
         Box::new(parent_it.chain(item_it))
     }
@@ -104,11 +103,11 @@ impl Display for Node {
             f,
             "({}{}{})",
             self.name,
-            if self.items.len() > 0 { " " } else { "" },
+            if !self.items.is_empty() { " " } else { "" },
             self.items
                 .iter()
                 .filter(|&item| !item.is_nothing())
-                .map(|item| format!("{}", item))
+                .map(|item| format!("{item}"))
                 .collect::<Vec<String>>()
                 .join(" ")
         )
@@ -149,10 +148,7 @@ impl Item {
 
     /// Returns true if the item is nothing.
     pub fn is_nothing(&self) -> bool {
-        match self {
-            Item::Nothing => true,
-            _ => false,
-        }
+        matches!(self, Item::Nothing)
     }
 
     /// Returns a string only if the item is an attribute.
@@ -175,8 +171,8 @@ impl Item {
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Item::Attribute(str) => write!(f, "{}", str),
-            Item::Node(node) => write!(f, "{}", node),
+            Item::Attribute(str) => write!(f, "{str}"),
+            Item::Node(node) => write!(f, "{node}"),
             Item::Nothing => write!(f, ""),
         }
     }
@@ -220,6 +216,6 @@ mod test {
                 *attr += "0";
             }
         }
-        assert_eq!(&format!("{}", ast), expected)
+        assert_eq!(&format!("{ast}"), expected)
     }
 }
