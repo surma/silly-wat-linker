@@ -7,8 +7,8 @@ enum Item {
     LineComment(String),
     BlockComment(String),
     Parens(Box<Vec<Item>>),
-    String(String),
-    Literal(String),
+    StringLiteral(String),
+    Ident(String),
 }
 
 static INDENT: &str = "\t";
@@ -37,7 +37,14 @@ impl Item {
 
     fn as_literal(&self) -> Option<&str> {
         match self {
-            Item::Literal(s) => Some(s.as_str()),
+            Item::Ident(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    fn as_string_lit(&self) -> Option<&str> {
+        match self {
+            Item::StringLiteral(s) => Some(s.as_str()),
             _ => None,
         }
     }
@@ -71,9 +78,9 @@ impl Parser {
             } else if self.is_next(";;") {
                 items.push(Item::LineComment(self.parse_linecomment()?));
             } else if self.is_next("\"") {
-                items.push(Item::String(self.parse_string()?));
+                items.push(Item::StringLiteral(self.parse_string()?));
             } else {
-                items.push(Item::Literal(self.parse_literal()?));
+                items.push(Item::Ident(self.parse_literal()?));
             }
             self.eat_whitespace()?;
         }
@@ -277,33 +284,15 @@ impl PrettyPrinter {
         }
     }
 
-    fn is_function_header_item(item: &Item) -> bool {
-        match item {
-            Item::Parens(items) => ["param", "result"]
-                .into_iter()
-                .any(|name| PrettyPrinter::is_parens_with_ident(items, name)),
-            Item::BlockComment(_) | Item::LineComment(_) => true,
-            _ => false,
-        }
-    }
-
     fn is_function_first_line_item(item: &Item) -> bool {
         match item {
-            Item::Literal(lit) => lit.starts_with("$"),
+            Item::Ident(lit) => lit.starts_with("$"),
             Item::Parens(items) => ["export", "import"]
                 .into_iter()
                 .any(|name| PrettyPrinter::is_parens_with_ident(items, name)),
             Item::BlockComment(_) | Item::LineComment(_) => true,
-            Item::String(_) => false,
+            Item::StringLiteral(_) => false,
         }
-    }
-
-    fn item_is_paren_with_ident(v: Option<&&Item>, name: &str) -> bool {
-        v.and_then(|v| v.as_parens())
-            .and_then(|v| v.get(0))
-            .and_then(|v| v.as_literal())
-            .map(|v| v == name)
-            .unwrap_or(false)
     }
 
     fn item_matches_predicate<F>(v: Option<&&Item>, pred: F) -> bool
@@ -318,13 +307,13 @@ impl PrettyPrinter {
             Item::Parens(items) => {
                 self.pretty_print_parens_as_single_line(items.as_slice(), level + 1)
             }
-            Item::Literal(lit) => self.emit(lit.as_str()),
+            Item::Ident(lit) => self.emit(lit.as_str()),
             Item::BlockComment(comment) => self.emit(format!(
                 "(; {} ;)",
                 comment.split("\n").collect::<Vec<&str>>().join(",").trim()
             )),
             Item::LineComment(comment) => self.emit(format!(");; {}\n", comment)),
-            Item::String(str) => self.emit(format!(r#""{}""#, str)),
+            Item::StringLiteral(str) => self.emit(format!(r#""{}""#, str)),
         }
     }
 
@@ -342,36 +331,8 @@ impl PrettyPrinter {
             self.pretty_print_item_as_single_line(it.next().unwrap(), level)
         }
 
-        self.emit_newlines(1);
-
-        // Print function header
-        if PrettyPrinter::item_matches_predicate(it.peek(), |v| {
-            PrettyPrinter::is_function_header_item(v)
-        }) {
-            while PrettyPrinter::item_matches_predicate(it.peek(), |v| {
-                PrettyPrinter::is_function_header_item(v)
-            }) {
-                self.emit(INDENT.repeat(level + 1).as_str());
-                self.pretty_print_item(it.next().unwrap(), level + 1);
-                self.emit_newlines(1);
-            }
-
-            self.emit_newlines(2);
-        }
-
-        // Print locals
-        if PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
-            while PrettyPrinter::item_is_paren_with_ident(it.peek(), "local") {
-                self.emit(INDENT.repeat(level + 1).as_str());
-                self.pretty_print_item(it.next().unwrap(), level + 1);
-                self.emit_newlines(1);
-            }
-
-            self.emit_newlines(2);
-        }
-
-        // Print body
         for item in it {
+            self.emit_newlines(1);
             self.emit(INDENT.repeat(level + 1).as_str());
             self.pretty_print_item(item, level + 1);
             self.emit_newlines(1);
@@ -380,20 +341,18 @@ impl PrettyPrinter {
         self.emit(")");
     }
 
-    fn pretty_print_parens_with_id_literal(&mut self, items: &[Item], level: usize) {
+    fn pretty_print_component(&mut self, items: &[Item], level: usize) {
+        assert!(PrettyPrinter::is_parens_with_ident(items, "component"));
         self.emit("(");
         self.emit(items[0].as_literal().unwrap());
-        let mut start = 1;
-        if let Some(id) = items.get(1).and_then(|item| item.as_literal()) {
-            self.emit(" ");
-            self.emit(id);
-            start = 2;
-        }
-        for item in items.iter().skip(start) {
-            self.emit("\n");
+
+        for item in items.iter().skip(1) {
+            self.emit_newlines(1);
             self.emit(INDENT.repeat(level + 1).as_str());
             self.pretty_print_item(item, level + 1);
+            self.emit_newlines(2);
         }
+        self.undo_newlines();
         self.emit(")");
     }
 
@@ -412,9 +371,9 @@ impl PrettyPrinter {
         match item {
             Item::BlockComment(comment) => self.pretty_print_block_comment(comment, level),
             Item::LineComment(comment) => self.pretty_print_line_comment(comment, level),
-            Item::Literal(lit) => self.pretty_print_literal(lit, level),
+            Item::Ident(lit) => self.pretty_print_literal(lit, level),
             Item::Parens(items) => self.pretty_print_parens(items.as_slice(), level),
-            Item::String(_) => self.pretty_print_item_as_single_line(item, level),
+            Item::StringLiteral(_) => self.pretty_print_item_as_single_line(item, level),
         }
     }
 
@@ -488,22 +447,6 @@ impl PrettyPrinter {
         }
     }
 
-    fn is_parens_type_with_ident(items: &[Item]) -> bool {
-        [
-            "br",
-            "br_if",
-            "block",
-            "loop",
-            "if",
-            "call",
-            "local.set",
-            "local.tee",
-            "global.set",
-        ]
-        .into_iter()
-        .any(|ident| PrettyPrinter::is_parens_with_ident(items, ident))
-    }
-
     fn pretty_print_parens(&mut self, items: &[Item], level: usize) {
         if PrettyPrinter::is_single_line_node_type(items)
             || PrettyPrinter::has_at_most_one_simple_attribute(items)
@@ -511,51 +454,61 @@ impl PrettyPrinter {
             self.pretty_print_parens_as_single_line(items, level);
         } else if PrettyPrinter::is_parens_with_ident(items, "func") {
             self.pretty_print_func(items, level);
+        } else if PrettyPrinter::is_parens_with_ident(items, "component") {
+            self.pretty_print_component(items, level);
         } else {
-            let mut it = items.iter().peekable();
-            self.emit("(");
-            loop {
-                let item = match it.next() {
-                    Some(item) => item,
-                    None => break,
-                };
-                self.pretty_print_item(item, level + 1);
-                let next_item_is_id = it
-                    .peek()
-                    .and_then(|item| item.as_literal())
-                    .map(|s| s.starts_with("$"))
-                    .unwrap_or(false);
-                match item.as_literal() {
-                    Some("core") | Some("with") | Some("canon") => {}
-                    Some(_) if next_item_is_id => {}
-                    _ => break,
-                }
-                self.emit(" ");
-            }
-            for (idx, item) in it.enumerate() {
-                self.emit_newlines(1);
-                let is_func = item
-                    .as_parens()
-                    .map(|item| PrettyPrinter::is_parens_with_ident(item, "func"))
-                    .unwrap_or(false);
-                let previous_item_was_comment = items
-                    .get(idx)
-                    .map(|item| {
-                        item.as_block_comment().is_some() || item.as_line_comment().is_some()
-                    })
-                    .unwrap_or(false);
-                if is_func && idx > 0 && !previous_item_was_comment {
-                    self.emit_newlines(2);
-                }
-                self.emit(INDENT.repeat(level + 1).as_str());
-                self.pretty_print_item(item, level + 1);
-                if is_func {
-                    self.emit_newlines(2);
-                }
-            }
-            self.undo_newlines();
-            self.emit(")");
+            self.pretty_print_generic_parens(items, level);
         }
+    }
+
+    fn pretty_print_generic_parens(&mut self, items: &[Item], level: usize) {
+        let mut it = items.iter().peekable();
+        self.emit("(");
+        loop {
+            let item = match it.next() {
+                Some(item) => item,
+                None => break,
+            };
+            self.pretty_print_item(item, level + 1);
+            let next_item_is_id = it
+                .peek()
+                .and_then(|item| item.as_literal())
+                .map(|s| s.starts_with("$"))
+                .unwrap_or(false);
+            let next_item_is_string_lit = it
+                .peek()
+                .map(|item| item.as_string_lit().is_some())
+                .unwrap_or(false);
+            match item {
+                Item::Ident(s) if s == "core" => {}
+                Item::Ident(s) if s == "canon" => {}
+                _ if next_item_is_id => {}
+                _ if next_item_is_string_lit => {}
+                _ => break,
+            }
+            self.emit(" ");
+        }
+        for (idx, item) in it.enumerate() {
+            self.emit_newlines(1);
+            let is_func = item
+                .as_parens()
+                .map(|item| PrettyPrinter::is_parens_with_ident(item, "func"))
+                .unwrap_or(false);
+            let previous_item_was_comment = items
+                .get(idx)
+                .map(|item| item.as_block_comment().is_some() || item.as_line_comment().is_some())
+                .unwrap_or(false);
+            if is_func && idx > 0 && !previous_item_was_comment {
+                self.emit_newlines(2);
+            }
+            self.emit(INDENT.repeat(level + 1).as_str());
+            self.pretty_print_item(item, level + 1);
+            if is_func {
+                self.emit_newlines(2);
+            }
+        }
+        self.undo_newlines();
+        self.emit(")");
     }
 }
 
@@ -649,9 +602,7 @@ mod test {
                 \t\t(param $a i32)
                 \t\t(param $b i32)
                 \t\t(result i32)
-
                 \t\t(local $tmp i32)
-
                 \t\t(i32.add
                 \t\t\t(local.get $a)
                 \t\t\t(local.get $b))))
@@ -737,10 +688,8 @@ mod test {
                 (module
                 \t(func $name
                 \t\t(result i32)
-
                 \t\t(local $tmp i32)
                 \t\t(local $tmp2 i32)
-
                 \t\t(i32.const 4)))
             ",
         );
@@ -763,9 +712,7 @@ mod test {
                 (module
                 \t(func $main (export \"main\")
                 \t\t(param $a i32)
-
                 \t\t(local $tmp i32)
-
                 \t\t(something $a
                 \t\t\tb
                 \t\t\tc)))
@@ -1040,18 +987,45 @@ mod test {
     }
     #[test]
     fn component() {
-        let input = "
+        let input = r#"
                 (component
                     (core module $MEM
-                        (func (export \"lol\"))
+                        (func (export "lol"))
+                    )
+
+                	(core 
+                        instance 
+                        $m
+                		(instantiate $MEM
+                			(with "env"
+                				(instance)
+                            )
+                        )
+                    )
+
+                    (func $run (result s32)
+                		(canon lift
+                			(core func $m
+                				"run")
+                        )
                     )
                 )
-        ";
+        "#;
         let expected = unindent(
             "
                 (component
                 \t(core module $MEM
-                \t\t(func (export \"lol\"))))
+                \t\t(func (export \"lol\")))
+
+                \t(core instance $m
+                \t\t(instantiate $MEM
+                \t\t\t(with \"env\"
+                \t\t\t\t(instance))))
+
+                \t(func $run
+                \t\t(result s32)
+                \t\t(canon lift
+                \t\t\t(core func $m \"run\"))))
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
