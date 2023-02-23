@@ -511,14 +511,28 @@ impl PrettyPrinter {
             self.pretty_print_parens_as_single_line(items, level);
         } else if PrettyPrinter::is_parens_with_ident(items, "func") {
             self.pretty_print_func(items, level);
-        } else if PrettyPrinter::is_parens_type_with_ident(items) {
-            self.pretty_print_parens_with_id_literal(items, level);
         } else {
+            let mut it = items.iter().peekable();
             self.emit("(");
-            if let Some(item) = items.get(0) {
-                self.pretty_print_item(item, 0);
+            loop {
+                let item = match it.next() {
+                    Some(item) => item,
+                    None => break,
+                };
+                self.pretty_print_item(item, level + 1);
+                let next_item_is_id = it
+                    .peek()
+                    .and_then(|item| item.as_literal())
+                    .map(|s| s.starts_with("$"))
+                    .unwrap_or(false);
+                match item.as_literal() {
+                    Some("core") | Some("with") | Some("canon") => {}
+                    Some(_) if next_item_is_id => {}
+                    _ => break,
+                }
+                self.emit(" ");
             }
-            for (idx, item) in items.iter().skip(1).enumerate() {
+            for (idx, item) in it.enumerate() {
                 self.emit_newlines(1);
                 let is_func = item
                     .as_parens()
@@ -530,7 +544,7 @@ impl PrettyPrinter {
                         item.as_block_comment().is_some() || item.as_line_comment().is_some()
                     })
                     .unwrap_or(false);
-                if is_func && idx != 0 && !previous_item_was_comment {
+                if is_func && idx > 0 && !previous_item_was_comment {
                     self.emit_newlines(2);
                 }
                 self.emit(INDENT.repeat(level + 1).as_str());
@@ -752,8 +766,7 @@ mod test {
 
                 \t\t(local $tmp i32)
 
-                \t\t(something
-                \t\t\t$a
+                \t\t(something $a
                 \t\t\tb
                 \t\t\tc)))
             ",
@@ -1021,6 +1034,24 @@ mod test {
                 \t\tmore
                 \t;)
                 \t(data))
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+    #[test]
+    fn component() {
+        let input = "
+                (component
+                    (core module $MEM
+                        (func (export \"lol\"))
+                    )
+                )
+        ";
+        let expected = unindent(
+            "
+                (component
+                \t(core module $MEM
+                \t\t(func (export \"lol\"))))
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
