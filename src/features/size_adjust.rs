@@ -162,7 +162,8 @@ mod test {
                 (memory $x)
                 (data (memory $x) (offset (i32.const 65534)) "123")
             )
-        "#.to_string();
+        "#
+        .to_string();
         run_test(input, 2);
     }
 
@@ -173,7 +174,8 @@ mod test {
                 (memory $x)
                 (data (memory $x) (i32.const 65534) "123")
             )
-        "#.to_string();
+        "#
+        .to_string();
         run_test(input, 2);
     }
 
@@ -198,7 +200,8 @@ mod test {
                 (memory $x)
                 (data (i32.const 65536) "1")
             )
-        "#.to_string();
+        "#
+        .to_string();
         run_test(input, 2);
     }
 
@@ -209,7 +212,8 @@ mod test {
                 (memory $x)
                 (data (i32.const 0x10000) "X")
             )
-        "#.to_string();
+        "#
+        .to_string();
         run_test(input, 2);
     }
 }

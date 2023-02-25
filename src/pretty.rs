@@ -218,6 +218,8 @@ pub fn pretty_print(code: &str) -> Result<String> {
 pub struct PrettyPrinter {
     buffer: String,
     newline_emitted: usize,
+    inside_component: bool,
+    inside_module: bool,
 }
 
 impl PrettyPrinter {
@@ -225,6 +227,8 @@ impl PrettyPrinter {
         PrettyPrinter {
             buffer: String::new(),
             newline_emitted: 0,
+            inside_component: false,
+            inside_module: false,
         }
     }
 
@@ -254,7 +258,14 @@ impl PrettyPrinter {
         self.buffer.truncate(n);
     }
 
+    fn remove_trailing_whitespace(&mut self) {
+        while self.buffer.ends_with(' ') {
+            self.buffer.pop();
+        }
+    }
+
     fn emit_newlines(&mut self, n: usize) {
+        self.remove_trailing_whitespace();
         while self.newline_emitted < n {
             self.buffer += "\n";
             self.newline_emitted += 1;
@@ -273,11 +284,11 @@ impl PrettyPrinter {
                 .unwrap_or(true)
     }
 
-    fn is_single_line_node_type(items: &[Item]) -> bool {
+    fn is_single_line_node_type(&self, items: &[Item]) -> bool {
         if let Some(lit) = items[0].as_literal() {
             matches!(
                 lit,
-                "param" | "local" | "export" | "table" | "memory" | "import" | "global"
+                "param" | "local" | "table" | "memory" | "global" | "import" | "export"
             )
         } else {
             false
@@ -289,9 +300,9 @@ impl PrettyPrinter {
             Item::Ident(lit) => lit.starts_with('$'),
             Item::Parens(items) => ["export", "import"]
                 .into_iter()
-                .any(|name| PrettyPrinter::is_parens_with_ident(items, name)),
+                .any(|name| PrettyPrinter::items_start_with_ident(items, name)),
             Item::BlockComment(_) | Item::LineComment(_) => true,
-            Item::StringLiteral(_) => false,
+            Item::StringLiteral(_) => true,
         }
     }
 
@@ -302,9 +313,22 @@ impl PrettyPrinter {
         v.map(|v| pred(v)).unwrap_or(false)
     }
 
+    fn is_parens_that_breaks_single_line(items: &[Item]) -> bool {
+        PrettyPrinter::items_start_with_ident(items, "component")
+            || PrettyPrinter::items_start_with_ident(items, "instance")
+            || PrettyPrinter::items_start_with_ident(items, "module")
+            || PrettyPrinter::items_start_with_idents(items, &["core", "module"])
+    }
+
     fn pretty_print_item_as_single_line(&mut self, item: &Item, level: usize) {
         match item {
             Item::Parens(items) => {
+                if PrettyPrinter::is_parens_that_breaks_single_line(items) {
+                    self.emit_newlines(1);
+                    self.emit(INDENT.repeat(level));
+                    self.pretty_print_item(item, level);
+                    return;
+                }
                 self.pretty_print_parens_as_single_line(items.as_slice(), level + 1)
             }
             Item::Ident(lit) => self.emit(lit.as_str()),
@@ -317,9 +341,12 @@ impl PrettyPrinter {
         }
     }
 
-    fn pretty_print_func(&mut self, items: &[Item], level: usize) {
-        assert!(PrettyPrinter::is_parens_with_ident(items, "func"));
+    fn pretty_print_func(&mut self, mut items: &[Item], level: usize) {
         self.emit("(");
+        if PrettyPrinter::items_start_with_ident(items, "core") {
+            self.emit("core ");
+            items = &items[1..];
+        }
         self.emit(items[0].as_literal().unwrap());
         let mut it = items.iter().skip(1).peekable();
 
@@ -342,7 +369,7 @@ impl PrettyPrinter {
     }
 
     fn pretty_print_component(&mut self, items: &[Item], level: usize) {
-        assert!(PrettyPrinter::is_parens_with_ident(items, "component"));
+        assert!(PrettyPrinter::items_start_with_ident(items, "component"));
         self.emit("(");
         self.emit(items[0].as_literal().unwrap());
 
@@ -364,6 +391,7 @@ impl PrettyPrinter {
                 self.emit(" ");
             }
         }
+        // TODO: Undo space?
         self.emit(")");
     }
 
@@ -389,13 +417,15 @@ impl PrettyPrinter {
     }
 
     fn trim_empty_lines(lines: &mut Vec<&str>) {
-        while lines.first()
+        while lines
+            .first()
             .map(|line| line.trim().is_empty())
             .unwrap_or(false)
         {
             lines.remove(0);
         }
-        while lines.last()
+        while lines
+            .last()
             .map(|line| line.trim().is_empty())
             .unwrap_or(false)
         {
@@ -437,23 +467,42 @@ impl PrettyPrinter {
         self.emit(lit);
     }
 
-    fn is_parens_with_ident(items: &[Item], ident: &str) -> bool {
-        if let Some(item) = items.get(0) {
-            item.as_literal().map(|lit| lit == ident).unwrap_or(false)
-        } else {
-            false
+    fn items_start_with_idents(mut items: &[Item], idents: &[&str]) -> bool {
+        items = &items[0..idents.len()];
+        if items.len() != idents.len() {
+            return false;
         }
+        // Are all items the same?
+        items
+            .iter()
+            .zip(idents.iter())
+            .all(|(a, &b)| a.as_literal().map(|lit| lit == b).unwrap_or(false))
+    }
+
+    fn items_is_type(items: &[Item], typ: &str) -> bool {
+        PrettyPrinter::items_start_with_ident(items, typ)
+            || PrettyPrinter::items_start_with_idents(items, &["core", typ])
+    }
+
+    fn items_start_with_ident(items: &[Item], ident: &str) -> bool {
+        PrettyPrinter::items_start_with_idents(items, &[ident])
     }
 
     fn pretty_print_parens(&mut self, items: &[Item], level: usize) {
-        if PrettyPrinter::is_single_line_node_type(items)
+        if self.is_single_line_node_type(items)
             || PrettyPrinter::has_at_most_one_simple_attribute(items)
         {
             self.pretty_print_parens_as_single_line(items, level);
-        } else if PrettyPrinter::is_parens_with_ident(items, "func") {
+        } else if PrettyPrinter::items_is_type(items, "func") {
             self.pretty_print_func(items, level);
-        } else if PrettyPrinter::is_parens_with_ident(items, "component") {
+        } else if PrettyPrinter::items_start_with_ident(items, "component") {
+            let previous = std::mem::replace(&mut self.inside_component, true);
             self.pretty_print_component(items, level);
+            self.inside_component = previous;
+        } else if PrettyPrinter::items_start_with_ident(items, "module") {
+            let previous = std::mem::replace(&mut self.inside_module, true);
+            self.pretty_print_generic_parens(items, level);
+            self.inside_module = previous;
         } else {
             self.pretty_print_generic_parens(items, level);
         }
@@ -486,7 +535,7 @@ impl PrettyPrinter {
             self.emit_newlines(1);
             let is_func = item
                 .as_parens()
-                .map(|item| PrettyPrinter::is_parens_with_ident(item, "func"))
+                .map(|item| PrettyPrinter::items_start_with_ident(item, "func"))
                 .unwrap_or(false);
             let previous_item_was_comment = items
                 .get(idx)
@@ -979,6 +1028,7 @@ mod test {
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
     }
+
     #[test]
     fn component() {
         let input = r#"
@@ -1020,6 +1070,30 @@ mod test {
                 \t\t(result s32)
                 \t\t(canon lift
                 \t\t\t(core func $m \"run\"))))
+            ",
+        );
+        assert_eq!(pretty_print(input).unwrap(), expected);
+    }
+
+    #[test]
+    fn component_imports() {
+        let input = r#"
+            (component
+                (import "log" (instance $logi (export "log" (func (param "str" string)))))
+                (import "memory-manager" (core module $MEM_MGR (export "memory" (memory 1)) (export "realloc" (func (param i32 i32 i32 i32) (result i32)))))
+            )
+        "#;
+        let expected = unindent(
+            "
+                (component
+                \t(import \"log\"
+                \t\t(instance $logi
+                \t\t\t(export \"log\" (func (param \"str\" string)))))
+
+                \t(import \"memory-manager\"
+                \t\t(core module $MEM_MGR
+                \t\t\t(export \"memory\" (memory 1))
+                \t\t\t(export \"realloc\" (func (param i32 i32 i32 i32) (result i32))))))
             ",
         );
         assert_eq!(pretty_print(input).unwrap(), expected);
