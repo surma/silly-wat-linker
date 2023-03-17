@@ -468,7 +468,7 @@ impl PrettyPrinter {
     }
 
     fn items_start_with_idents(mut items: &[Item], idents: &[&str]) -> bool {
-        items = &items[0..idents.len()];
+        items = &items[0..idents.len().min(items.len())];
         if items.len() != idents.len() {
             return false;
         }
